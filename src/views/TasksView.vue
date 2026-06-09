@@ -12,7 +12,7 @@
         @pause="pauseTask"
         @resume="resumeTask"
         @cancel="cancelTask"
-        @remove="tasksStore.removeTask"
+        @remove="removeTask"
         @reveal="openTaskFolder"
       />
     </div>
@@ -33,6 +33,7 @@ import {
   uploadWithEngine
 } from '@/services/localFile'
 import { tokenVault } from '@/services/tokenVault'
+import { syncOfflineDownloadTasks } from '@/services/offlineTasks'
 import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useTasksStore } from '@/stores/tasks'
@@ -52,6 +53,8 @@ function openTaskFolder(path: string) {
 }
 
 async function pauseTask(id: string) {
+  const task = tasksStore.taskById(id)
+  if (task?.source === 'openlist-offline') return
   tasksStore.setStatus(id, 'paused')
   await pauseTransferTask(id)
 }
@@ -59,6 +62,10 @@ async function pauseTask(id: string) {
 async function resumeTask(id: string) {
   const task = tasksStore.taskById(id)
   if (!task) return
+  if (task.source === 'openlist-offline') {
+    await retryCloudTask(task.id)
+    return
+  }
   const originalStatus = task.status
 
   if (originalStatus === 'paused' || originalStatus === 'running') {
@@ -67,7 +74,6 @@ async function resumeTask(id: string) {
     return
   }
 
-  if (task.source === 'openlist-offline') return
   if (task.type === 'upload') {
     await resumeUploadTask(task.id)
     return
@@ -76,8 +82,53 @@ async function resumeTask(id: string) {
 }
 
 async function cancelTask(id: string) {
+  const task = tasksStore.taskById(id)
+  if (task?.source === 'openlist-offline') {
+    await cancelCloudTask(task.id)
+    return
+  }
   tasksStore.setStatus(id, 'canceled')
   await cancelTransferTask(id)
+}
+
+async function removeTask(id: string) {
+  const task = tasksStore.taskById(id)
+  if (task?.source === 'openlist-offline' && task.remoteId) {
+    try {
+      await fsApi.offlineDownloadTaskAction('delete', task.remoteId)
+      await syncOfflineDownloadTasks()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '云下载任务删除失败')
+      return
+    }
+  }
+  tasksStore.removeTask(id)
+}
+
+async function retryCloudTask(id: string) {
+  const task = tasksStore.taskById(id)
+  if (!task?.remoteId) return
+  try {
+    await fsApi.offlineDownloadTaskAction('retry', task.remoteId)
+    tasksStore.updateTask(id, { status: 'running', message: '' })
+    await syncOfflineDownloadTasks()
+    message.success('云下载任务已重试')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '云下载任务重试失败')
+  }
+}
+
+async function cancelCloudTask(id: string) {
+  const task = tasksStore.taskById(id)
+  if (!task?.remoteId) return
+  try {
+    await fsApi.offlineDownloadTaskAction('cancel', task.remoteId)
+    tasksStore.updateTask(id, { status: 'canceled' })
+    await syncOfflineDownloadTasks()
+    message.success('云下载任务已取消')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '云下载任务取消失败')
+  }
 }
 
 async function resumeUploadTask(id: string) {

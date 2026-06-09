@@ -97,5 +97,11 @@ export const fsApi = {
 
   offlineDownloadDoneTasks() {
     return openListHttp.get<unknown, OpenListTaskItem[]>('/api/admin/task/offline_download/done')
+  },
+
+  offlineDownloadTaskAction(action: 'cancel' | 'retry' | 'delete', taskId: string) {
+    return openListHttp.post(`/api/admin/task/offline_download/${action}`, null, {
+      params: { tid: taskId }
+    })
   }
 }

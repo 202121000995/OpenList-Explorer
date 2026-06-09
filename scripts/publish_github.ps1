@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_0.1.5_x64-setup.exe"
+$Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_0.1.6_x64-setup.exe"
 $Publisher = Join-Path $ProjectRoot "scripts\publish_github.py"
 
 Write-Host "Project:   $ProjectRoot"
