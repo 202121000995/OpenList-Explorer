@@ -62,32 +62,42 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
     render(row) {
       const localControllable = row.source !== 'openlist-offline'
       const cloudTask = row.source === 'openlist-offline'
-      const canResume = localControllable || cloudTask
-      const canCancel = localControllable || (cloudTask && !['success', 'failed', 'canceled'].includes(row.status))
+      const canPause = localControllable && row.status === 'running'
+      const canResume = localControllable
+        ? ['paused', 'failed', 'canceled'].includes(row.status)
+        : cloudTask && ['failed', 'canceled'].includes(row.status)
+      const canCancel = ['waiting', 'running', 'paused'].includes(row.status) && (localControllable || cloudTask)
       return h(NSpace, { justify: 'end', size: 6 }, () => [
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, disabled: !row.localPath, onClick: () => row.localPath && emit('reveal', row.localPath) },
+          {
+            circle: true,
+            size: 'small',
+            secondary: true,
+            title: '打开所在文件夹',
+            disabled: !row.localPath,
+            onClick: () => row.localPath && emit('reveal', row.localPath)
+          },
           { icon: () => h(FolderOpen, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, disabled: !localControllable, onClick: () => emit('pause', row.id) },
+          { circle: true, size: 'small', secondary: true, title: '暂停', disabled: !canPause, onClick: () => emit('pause', row.id) },
           { icon: () => h(Pause, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, disabled: !canResume, onClick: () => emit('resume', row.id) },
+          { circle: true, size: 'small', secondary: true, title: cloudTask ? '重试' : '继续', disabled: !canResume, onClick: () => emit('resume', row.id) },
           { icon: () => h(Play, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, type: 'error', disabled: !canCancel, onClick: () => emit('cancel', row.id) },
+          { circle: true, size: 'small', secondary: true, type: 'error', title: '取消', disabled: !canCancel, onClick: () => emit('cancel', row.id) },
           { icon: () => h(X, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, onClick: () => emit('remove', row.id) },
+          { circle: true, size: 'small', secondary: true, title: '删除记录', onClick: () => emit('remove', row.id) },
           { icon: () => h(Trash2, { size: 15 }) }
         )
       ])

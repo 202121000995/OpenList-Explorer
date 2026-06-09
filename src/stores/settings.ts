@@ -7,6 +7,9 @@ import { tokenVault } from '@/services/tokenVault'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type LanguageMode = 'zh-CN' | 'en-US'
 export type OpenListInstanceStatus = 'unknown' | 'online' | 'offline'
+export type FileViewMode = 'rows' | 'grid'
+export type FileSortKey = 'name' | 'size' | 'modifiedAt'
+export type FileSortOrder = 'asc' | 'desc'
 
 export interface OpenListInstance {
   id: string
@@ -25,6 +28,9 @@ interface SettingsSnapshot {
   defaultInstanceId: string
   theme: ThemeMode
   language: LanguageMode
+  fileViewMode: FileViewMode
+  fileSortKey: FileSortKey
+  fileSortOrder: FileSortOrder
   downloadDir: string
   uploadThreads: number
   downloadThreads: number
@@ -44,6 +50,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const defaultInstanceId = useStorage('openlist.defaultInstanceId', '')
   const theme = useStorage<ThemeMode>('openlist.theme', 'auto')
   const language = useStorage<LanguageMode>('openlist.language', 'zh-CN')
+  const fileViewMode = useStorage<FileViewMode>('openlist.fileViewMode', 'rows')
+  const fileSortKey = useStorage<FileSortKey>('openlist.fileSortKey', 'name')
+  const fileSortOrder = useStorage<FileSortOrder>('openlist.fileSortOrder', 'asc')
   const downloadDir = useStorage('openlist.downloadDir', '')
   const uploadThreads = useStorage('openlist.uploadThreads', 3)
   const downloadThreads = useStorage('openlist.downloadThreads', 3)
@@ -191,6 +200,9 @@ export const useSettingsStore = defineStore('settings', () => {
       defaultInstanceId.value = saved.defaultInstanceId || defaultInstanceId.value
       theme.value = saved.theme || theme.value
       language.value = saved.language || language.value
+      fileViewMode.value = saved.fileViewMode || fileViewMode.value
+      fileSortKey.value = saved.fileSortKey || fileSortKey.value
+      fileSortOrder.value = saved.fileSortOrder || fileSortOrder.value
       downloadDir.value = saved.downloadDir || downloadDir.value
       uploadThreads.value = saved.uploadThreads || uploadThreads.value
       downloadThreads.value = saved.downloadThreads || downloadThreads.value
@@ -200,7 +212,19 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   watch(
-    [instances, activeInstanceId, defaultInstanceId, theme, language, downloadDir, uploadThreads, downloadThreads],
+    [
+      instances,
+      activeInstanceId,
+      defaultInstanceId,
+      theme,
+      language,
+      fileViewMode,
+      fileSortKey,
+      fileSortOrder,
+      downloadDir,
+      uploadThreads,
+      downloadThreads
+    ],
     () => {
       if (!hydrated) return
       dbSetJson<SettingsSnapshot>('settings', {
@@ -209,6 +233,9 @@ export const useSettingsStore = defineStore('settings', () => {
         defaultInstanceId: defaultInstanceId.value,
         theme: theme.value,
         language: language.value,
+        fileViewMode: fileViewMode.value,
+        fileSortKey: fileSortKey.value,
+        fileSortOrder: fileSortOrder.value,
         downloadDir: downloadDir.value,
         uploadThreads: uploadThreads.value,
         downloadThreads: downloadThreads.value
@@ -227,6 +254,9 @@ export const useSettingsStore = defineStore('settings', () => {
     activeInstance,
     theme,
     language,
+    fileViewMode,
+    fileSortKey,
+    fileSortOrder,
     downloadDir,
     uploadThreads,
     downloadThreads,

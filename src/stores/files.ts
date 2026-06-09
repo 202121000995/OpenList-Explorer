@@ -31,8 +31,18 @@ export const useFilesStore = defineStore('files', () => {
   const loading = ref(false)
   const lastError = ref('')
   const keyword = ref('')
-  const sortKey = ref<'name' | 'size' | 'modifiedAt'>('name')
-  const sortOrder = ref<'asc' | 'desc'>('asc')
+  const sortKey = computed({
+    get: () => settingsStore.fileSortKey,
+    set: (value) => {
+      settingsStore.fileSortKey = value
+    }
+  })
+  const sortOrder = computed({
+    get: () => settingsStore.fileSortOrder,
+    set: (value) => {
+      settingsStore.fileSortOrder = value
+    }
+  })
 
   const selectedFiles = computed(() => files.value.filter((file) => selectedPaths.value.includes(file.path)))
 

@@ -108,7 +108,7 @@
       <input ref="directoryInput" class="hidden-input" multiple type="file" webkitdirectory @change="handleDirectoryUpload" />
 
       <n-data-table
-        v-if="viewMode === 'rows'"
+        v-if="settingsStore.fileViewMode === 'rows'"
         v-model:checked-row-keys="filesStore.selectedPaths"
         class="file-table explorer-table"
         :columns="columns"
@@ -342,7 +342,6 @@ const cloudTools = ref<string[]>(['SimpleHttp'])
 const cloudTargetPath = ref('')
 const cloudSubmitting = ref(false)
 const activeFile = ref<ExplorerFileItem | null>(null)
-const viewMode = ref<'rows' | 'grid'>('rows')
 let unlistenDragDrop: UnlistenFn | null = null
 
 function delay(ms: number) {
@@ -446,8 +445,15 @@ const cloudToolOptions = computed<Array<{ label: string; value: string; disabled
 })
 
 const viewOptions = computed<DropdownOption[]>(() => [
-  { label: viewMode.value === 'rows' ? '列表排列（当前）' : '列表排列', key: 'rows', icon: renderIcon(Rows3) },
-  { label: viewMode.value === 'grid' ? '网格排列（当前）' : '网格排列', key: 'grid', icon: renderIcon(Grid2X2) }
+  { label: settingsStore.fileViewMode === 'rows' ? '列表排列（当前）' : '列表排列', key: 'rows', icon: renderIcon(Rows3) },
+  { label: settingsStore.fileViewMode === 'grid' ? '网格排列（当前）' : '网格排列', key: 'grid', icon: renderIcon(Grid2X2) },
+  { type: 'divider', key: 'view-divider' },
+  { label: sortOptionLabel('name', 'asc', '名称 A-Z'), key: 'sort:name:asc' },
+  { label: sortOptionLabel('name', 'desc', '名称 Z-A'), key: 'sort:name:desc' },
+  { label: sortOptionLabel('size', 'asc', '大小 从小到大'), key: 'sort:size:asc' },
+  { label: sortOptionLabel('size', 'desc', '大小 从大到小'), key: 'sort:size:desc' },
+  { label: sortOptionLabel('modifiedAt', 'desc', '时间 最新优先'), key: 'sort:modifiedAt:desc' },
+  { label: sortOptionLabel('modifiedAt', 'asc', '时间 最早优先'), key: 'sort:modifiedAt:asc' }
 ])
 
 const contextOptions = computed<DropdownOption[]>(() => {
@@ -548,6 +554,10 @@ const columns: DataTableColumns<ExplorerFileItem> = [
 
 function renderIcon(icon: Component) {
   return () => h(NIcon, null, { default: () => h(icon, { size: 16 }) })
+}
+
+function sortOptionLabel(key: typeof filesStore.sortKey, order: typeof filesStore.sortOrder, label: string) {
+  return filesStore.sortKey === key && filesStore.sortOrder === order ? `${label}（当前）` : label
 }
 
 function fileIcon(row: ExplorerFileItem) {
@@ -713,7 +723,14 @@ function handleMoreSelect(key: string) {
 }
 
 function handleViewSelect(key: string) {
-  if (key === 'rows' || key === 'grid') viewMode.value = key
+  if (key === 'rows' || key === 'grid') settingsStore.fileViewMode = key
+  if (key.startsWith('sort:')) {
+    const [, sortKey, sortOrder] = key.split(':')
+    if ((sortKey === 'name' || sortKey === 'size' || sortKey === 'modifiedAt') && (sortOrder === 'asc' || sortOrder === 'desc')) {
+      filesStore.sortKey = sortKey
+      filesStore.sortOrder = sortOrder
+    }
+  }
 }
 
 async function handleContextSelect(key: string) {

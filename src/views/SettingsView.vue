@@ -13,6 +13,12 @@
         <n-form-item label="语言">
           <n-select v-model:value="settingsStore.language" :options="languageOptions" />
         </n-form-item>
+        <n-form-item label="文件视图">
+          <n-radio-group v-model:value="settingsStore.fileViewMode">
+            <n-radio-button value="rows">列表</n-radio-button>
+            <n-radio-button value="grid">网格</n-radio-button>
+          </n-radio-group>
+        </n-form-item>
         <n-form-item label="缓存">
           <n-input :value="settingsStore.cacheSize" readonly />
         </n-form-item>
