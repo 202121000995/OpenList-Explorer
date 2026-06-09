@@ -1,5 +1,7 @@
-import { computed, ref } from 'vue'
+import { computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { useStorage } from '@vueuse/core'
+import { dbGetJson, dbSetJson } from '@/services/database'
 
 export interface FavoriteEntry {
   id: string
@@ -8,7 +10,8 @@ export interface FavoriteEntry {
 }
 
 export const useFavoritesStore = defineStore('favorites', () => {
-  const items = ref<FavoriteEntry[]>([])
+  const items = useStorage<FavoriteEntry[]>('openlist.favorites', [])
+  let hydrated = false
 
   const paths = computed(() => new Set(items.value.map((item) => `${item.storage}:${item.path}`)))
 
@@ -30,5 +33,15 @@ export const useFavoritesStore = defineStore('favorites', () => {
     })
   }
 
-  return { items, isFavorite, toggle }
+  async function hydrateFromDatabase() {
+    const saved = await dbGetJson<FavoriteEntry[]>('favorites')
+    if (saved) items.value = saved
+    hydrated = true
+  }
+
+  watch(items, (value) => {
+    if (hydrated) dbSetJson('favorites', value)
+  }, { deep: true })
+
+  return { items, isFavorite, toggle, hydrateFromDatabase }
 })

@@ -58,7 +58,7 @@
         </div>
       </div>
 
-      <n-tabs type="segment" animated>
+      <n-tabs v-model:value="activeTab" type="segment" animated>
         <n-tab-pane name="builtin" tab="使用内置 OpenList">
           <div class="builtin-panel">
             <n-alert type="info" class="settings-alert">
@@ -74,6 +74,7 @@
             </n-descriptions>
             <n-space justify="end" class="section-actions">
               <n-button :loading="loadingBuiltin" @click="refreshBuiltinStatus()">刷新状态</n-button>
+              <n-button @click="openBuiltinAdmin">打开管理端</n-button>
               <n-button type="primary" :loading="loadingBuiltin" @click="useBuiltinOpenList">启动并连接</n-button>
             </n-space>
           </div>
@@ -127,17 +128,50 @@
         {{ connectionStatus.text }}
       </n-alert>
     </section>
+
+    <section class="settings-section">
+      <div class="panel-heading">云下载 / Aria2</div>
+      <n-alert type="info" class="settings-alert">
+        云下载能力由 OpenList 提供。Explorer 会读取 OpenList 已启用的下载工具；如果 OpenList 没有启用 Aria2，这里会明确显示。
+      </n-alert>
+      <n-descriptions :column="1" size="small" bordered>
+        <n-descriptions-item label="OpenList 云下载工具">
+          {{ offlineTools.length ? offlineTools.join(', ') : '未检测到' }}
+        </n-descriptions-item>
+        <n-descriptions-item label="OpenList Aria2">
+          {{ openListAria2Text }}
+        </n-descriptions-item>
+        <n-descriptions-item label="本机 Aria2 RPC">
+          {{ aria2Status?.running ? '已运行' : '未运行' }}
+        </n-descriptions-item>
+        <n-descriptions-item label="随包 Aria2">
+          {{ aria2Status?.available ? '已包含' : '未包含' }}
+        </n-descriptions-item>
+        <n-descriptions-item v-if="aria2Status?.binary_path" label="Aria2 程序">{{ aria2Status.binary_path }}</n-descriptions-item>
+        <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? 'http://127.0.0.1:6800/jsonrpc' }}</n-descriptions-item>
+      </n-descriptions>
+      <n-space justify="end" class="section-actions">
+        <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新云下载状态</n-button>
+        <n-button @click="openBuiltinAdmin">打开 OpenList 管理端</n-button>
+      </n-space>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import axios from 'axios'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { authApi } from '@/api/auth'
 import { fsApi } from '@/api/fs'
-import { getBuiltinOpenListStatus, startBuiltinOpenList, type BuiltinOpenListStatus } from '@/services/builtinOpenList'
+import {
+  getBuiltinOpenListStatus,
+  getLocalAria2Status,
+  startBuiltinOpenList,
+  type BuiltinOpenListStatus,
+  type LocalAria2Status
+} from '@/services/builtinOpenList'
 import { useSettingsStore } from '@/stores/settings'
 import { useStorageStore } from '@/stores/storage'
 
@@ -145,17 +179,22 @@ type StatusType = 'success' | 'warning' | 'error' | 'info'
 
 const settingsStore = useSettingsStore()
 const storageStore = useStorageStore()
+const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const usernameInput = ref(settingsStore.username)
 const passwordInput = ref('')
 const tokenInput = ref('')
+const activeTab = ref(route.query.mode === 'existing' ? 'existing' : 'builtin')
 const testing = ref(false)
 const loadingBuiltin = ref(false)
 const builtinStatus = ref<BuiltinOpenListStatus | null>(null)
 const builtinAdminPassword = ref('')
 const connectionStatus = ref<{ type: StatusType; text: string } | null>(null)
+const aria2Status = ref<LocalAria2Status | null>(null)
+const offlineTools = ref<string[]>([])
+const loadingCloudTools = ref(false)
 
 async function switchInstance(id: string) {
   await settingsStore.switchInstance(id)
@@ -218,6 +257,12 @@ const connectionSubtitle = computed(() => {
   if (storageStore.hasStorages) return `已读取 ${storageStore.storages.length} 个挂载点`
   if (storageStore.loadError) return storageStore.loadError
   return '可以使用内置 OpenList，或连接已有 OpenList。'
+})
+
+const openListAria2Text = computed(() => {
+  if (offlineTools.value.some((tool) => /aria2/i.test(tool))) return '已启用'
+  if (offlineTools.value.length) return '未启用'
+  return '未检测到云下载工具'
 })
 
 function serverBaseUrl() {
@@ -293,6 +338,36 @@ async function refreshBuiltinStatus(showFeedback = true) {
   }
 }
 
+async function refreshCloudDownloadStatus(showFeedback = true) {
+  loadingCloudTools.value = true
+  try {
+    aria2Status.value = await getLocalAria2Status()
+  } catch {
+    aria2Status.value = {
+      available: false,
+      running: false,
+      rpc_url: 'http://127.0.0.1:6800/jsonrpc',
+      message: '当前环境无法检测本机 Aria2。'
+    }
+  }
+
+  try {
+    offlineTools.value = await fsApi.offlineDownloadTools()
+  } catch {
+    offlineTools.value = []
+  } finally {
+    loadingCloudTools.value = false
+  }
+
+  if (showFeedback) {
+    message.info(
+      offlineTools.value.some((tool) => /aria2/i.test(tool))
+        ? 'OpenList 已启用 Aria2 云下载。'
+        : 'OpenList 当前未启用 Aria2 云下载。'
+    )
+  }
+}
+
 async function useBuiltinOpenList() {
   loadingBuiltin.value = true
   connectionStatus.value = null
@@ -318,6 +393,11 @@ async function useBuiltinOpenList() {
   } finally {
     loadingBuiltin.value = false
   }
+}
+
+function openBuiltinAdmin() {
+  const url = builtinStatus.value?.server_url || settingsStore.serverUrl || 'http://127.0.0.1:5244'
+  window.open(url, '_blank')
 }
 
 async function loginAndTest() {
@@ -406,5 +486,6 @@ async function clearToken() {
 
 onMounted(() => {
   refreshBuiltinStatus(false)
+  refreshCloudDownloadStatus(false)
 })
 </script>

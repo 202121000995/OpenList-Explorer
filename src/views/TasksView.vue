@@ -9,9 +9,9 @@
       </div>
       <TaskList
         :tasks="visibleTasks"
-        @pause="tasksStore.setStatus($event, 'paused')"
-        @resume="tasksStore.setStatus($event, 'running')"
-        @cancel="tasksStore.setStatus($event, 'canceled')"
+        @pause="pauseTask"
+        @resume="resumeTask"
+        @cancel="cancelTask"
         @remove="tasksStore.removeTask"
         @reveal="openTaskFolder"
       />
@@ -23,7 +23,7 @@
 import { computed } from 'vue'
 import { NButton } from 'naive-ui'
 import TaskList from '@/components/TaskList.vue'
-import { revealInFolder } from '@/services/localFile'
+import { cancelTransferTask, pauseTransferTask, resumeTransferTask, revealInFolder } from '@/services/localFile'
 import { useTasksStore } from '@/stores/tasks'
 
 const props = defineProps<{
@@ -35,5 +35,20 @@ const visibleTasks = computed(() => (props.type === 'upload' ? tasksStore.upload
 
 function openTaskFolder(path: string) {
   revealInFolder(path)
+}
+
+async function pauseTask(id: string) {
+  tasksStore.setStatus(id, 'paused')
+  await pauseTransferTask(id)
+}
+
+async function resumeTask(id: string) {
+  tasksStore.setStatus(id, 'running')
+  await resumeTransferTask(id)
+}
+
+async function cancelTask(id: string) {
+  tasksStore.setStatus(id, 'canceled')
+  await cancelTransferTask(id)
 }
 </script>

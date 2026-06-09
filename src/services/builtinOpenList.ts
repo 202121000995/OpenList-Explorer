@@ -17,8 +17,20 @@ export interface BuiltinOpenListSession {
   admin_password: string
 }
 
+export interface LocalAria2Status {
+  available: boolean
+  running: boolean
+  rpc_url: string
+  binary_path?: string
+  message: string
+}
+
 export async function getBuiltinOpenListStatus() {
   return invoke<BuiltinOpenListStatus>('builtin_openlist_status')
+}
+
+export async function getLocalAria2Status() {
+  return invoke<LocalAria2Status>('local_aria2_status')
 }
 
 export async function startBuiltinOpenList() {

@@ -1,6 +1,7 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { usePreferredDark, useStorage } from '@vueuse/core'
+import { dbGetJson, dbSetJson } from '@/services/database'
 import { tokenVault } from '@/services/tokenVault'
 
 export type ThemeMode = 'light' | 'dark' | 'auto'
@@ -13,6 +14,16 @@ export interface OpenListInstance {
   username: string
   publicBaseUrl: string
   isBuiltin: boolean
+}
+
+interface SettingsSnapshot {
+  instances: OpenListInstance[]
+  activeInstanceId: string
+  theme: ThemeMode
+  language: LanguageMode
+  downloadDir: string
+  uploadThreads: number
+  downloadThreads: number
 }
 
 function createId() {
@@ -33,6 +44,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const downloadThreads = useStorage('openlist.downloadThreads', 3)
   const cacheSize = ref('0 MB')
   const hasToken = ref(false)
+  let hydrated = false
 
   const effectiveTheme = computed(() => (theme.value === 'auto' ? (prefersDark.value ? 'dark' : 'light') : theme.value))
   const activeInstance = computed(() => {
@@ -137,6 +149,38 @@ export const useSettingsStore = defineStore('settings', () => {
     return hasToken.value
   }
 
+  async function hydrateFromDatabase() {
+    const saved = await dbGetJson<SettingsSnapshot>('settings')
+    if (saved) {
+      if (saved.instances?.length) instances.value = saved.instances
+      activeInstanceId.value = saved.activeInstanceId || activeInstanceId.value
+      theme.value = saved.theme || theme.value
+      language.value = saved.language || language.value
+      downloadDir.value = saved.downloadDir || downloadDir.value
+      uploadThreads.value = saved.uploadThreads || uploadThreads.value
+      downloadThreads.value = saved.downloadThreads || downloadThreads.value
+      ensureInstances()
+    }
+    hydrated = true
+  }
+
+  watch(
+    [instances, activeInstanceId, theme, language, downloadDir, uploadThreads, downloadThreads],
+    () => {
+      if (!hydrated) return
+      dbSetJson<SettingsSnapshot>('settings', {
+        instances: instances.value,
+        activeInstanceId: activeInstanceId.value,
+        theme: theme.value,
+        language: language.value,
+        downloadDir: downloadDir.value,
+        uploadThreads: uploadThreads.value,
+        downloadThreads: downloadThreads.value
+      })
+    },
+    { deep: true }
+  )
+
   return {
     serverUrl,
     username,
@@ -159,6 +203,7 @@ export const useSettingsStore = defineStore('settings', () => {
     switchInstance,
     updateToken,
     clearToken,
-    initializeToken
+    initializeToken,
+    hydrateFromDatabase
   }
 })

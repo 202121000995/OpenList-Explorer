@@ -1,9 +1,12 @@
-import { computed, ref } from 'vue'
+import { computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { useStorage } from '@vueuse/core'
+import { dbGetJson, dbSetJson } from '@/services/database'
 import type { TransferStatus, TransferTask, TransferType } from '@/models/task'
 
 export const useTasksStore = defineStore('tasks', () => {
-  const tasks = ref<TransferTask[]>([])
+  const tasks = useStorage<TransferTask[]>('openlist.tasks', [])
+  let hydrated = false
 
   const uploadTasks = computed(() => tasks.value.filter((task) => task.type === 'upload'))
   const downloadTasks = computed(() => tasks.value.filter((task) => task.type === 'download'))
@@ -45,6 +48,16 @@ export const useTasksStore = defineStore('tasks', () => {
     tasks.value = type ? tasks.value.filter((task) => task.type !== type) : []
   }
 
+  async function hydrateFromDatabase() {
+    const saved = await dbGetJson<TransferTask[]>('tasks')
+    if (saved) tasks.value = saved
+    hydrated = true
+  }
+
+  watch(tasks, (value) => {
+    if (hydrated) dbSetJson('tasks', value)
+  }, { deep: true })
+
   return {
     tasks,
     uploadTasks,
@@ -54,6 +67,7 @@ export const useTasksStore = defineStore('tasks', () => {
     taskById,
     setStatus,
     removeTask,
-    clearTasks
+    clearTasks,
+    hydrateFromDatabase
   }
 })

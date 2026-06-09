@@ -167,6 +167,7 @@ export const useFilesStore = defineStore('files', () => {
 
     try {
       const raw = new URL(rawUrl)
+      if (!isPrivateHost(raw.hostname)) return rawUrl
       const publicBase = new URL(publicBaseUrl)
       raw.protocol = publicBase.protocol
       raw.host = publicBase.host
@@ -174,6 +175,24 @@ export const useFilesStore = defineStore('files', () => {
     } catch {
       return rawUrl
     }
+  }
+
+  function isPrivateHost(hostname: string) {
+    const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    if (host === 'localhost' || host.endsWith('.local')) return true
+    if (!host.includes('.') && !host.includes(':')) return true
+    if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true
+
+    const parts = host.split('.').map((part) => Number(part))
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return false
+    const [a, b] = parts
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    )
   }
 
   function resetToActiveStorage() {

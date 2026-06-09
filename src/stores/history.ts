@@ -1,5 +1,7 @@
-import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { useStorage } from '@vueuse/core'
+import { watch } from 'vue'
+import { dbGetJson, dbSetJson } from '@/services/database'
 
 export interface HistoryEntry {
   id: string
@@ -9,7 +11,8 @@ export interface HistoryEntry {
 }
 
 export const useHistoryStore = defineStore('history', () => {
-  const items = ref<HistoryEntry[]>([])
+  const items = useStorage<HistoryEntry[]>('openlist.history', [])
+  let hydrated = false
 
   function add(type: HistoryEntry['type'], path: string) {
     items.value.unshift({
@@ -21,5 +24,15 @@ export const useHistoryStore = defineStore('history', () => {
     items.value = items.value.slice(0, 100)
   }
 
-  return { items, add }
+  async function hydrateFromDatabase() {
+    const saved = await dbGetJson<HistoryEntry[]>('history')
+    if (saved) items.value = saved
+    hydrated = true
+  }
+
+  watch(items, (value) => {
+    if (hydrated) dbSetJson('history', value)
+  }, { deep: true })
+
+  return { items, add, hydrateFromDatabase }
 })

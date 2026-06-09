@@ -914,6 +914,44 @@ button {
   margin-top: 18px;
 }
 
+.onboarding-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.onboarding-options {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: var(--app-panel);
+  text-align: left;
+  cursor: pointer;
+}
+
+.onboarding-option:hover {
+  border-color: #2563eb;
+  background: var(--app-subtle);
+}
+
+.onboarding-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.onboarding-option small {
+  color: var(--app-muted);
+  line-height: 1.5;
+}
+
 @media (max-width: 1120px) {
   body {
     min-width: 860px;

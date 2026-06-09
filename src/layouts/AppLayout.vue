@@ -56,20 +56,61 @@
     <main class="window-content">
       <RouterView />
     </main>
+
+    <n-modal v-model:show="showOnboarding" :mask-closable="false">
+      <n-card class="onboarding-modal" title="连接 OpenList" role="dialog" aria-modal="true">
+        <div class="onboarding-options">
+          <button class="onboarding-option" type="button" @click="chooseOnboarding('builtin')">
+            <Cloud :size="22" />
+            <span>
+              <strong>使用内置 OpenList</strong>
+              <small>适合新用户，软件会启动随安装包提供的 OpenList。</small>
+            </span>
+          </button>
+          <button class="onboarding-option" type="button" @click="chooseOnboarding('existing')">
+            <Settings :size="22" />
+            <span>
+              <strong>连接已有 OpenList</strong>
+              <small>输入服务器地址和 OpenList 账号密码。</small>
+            </span>
+          </button>
+        </div>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { Cloud, Download, Files, Moon, Settings, Sun, Upload } from '@lucide/vue'
+import { useFilesStore } from '@/stores/files'
+import { useFavoritesStore } from '@/stores/favorites'
+import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useStorageStore } from '@/stores/storage'
+import { useTasksStore } from '@/stores/tasks'
+import type { TransferStatus } from '@/models/task'
 
 const route = useRoute()
 const router = useRouter()
 const settingsStore = useSettingsStore()
 const storageStore = useStorageStore()
+const filesStore = useFilesStore()
+const tasksStore = useTasksStore()
+const favoritesStore = useFavoritesStore()
+const historyStore = useHistoryStore()
+const showOnboarding = ref(false)
+let unlistenTransfer: UnlistenFn | null = null
+
+interface TransferProgressPayload {
+  id: string
+  status: TransferStatus
+  progress: number
+  speed: number
+  local_path?: string
+}
 
 const navItems = [
   { name: 'files', label: '文件', icon: Files },
@@ -93,7 +134,44 @@ function toggleTheme() {
   settingsStore.theme = settingsStore.effectiveTheme === 'dark' ? 'light' : 'dark'
 }
 
-onMounted(() => {
-  settingsStore.initializeToken()
+async function chooseOnboarding(mode: 'builtin' | 'existing') {
+  localStorage.setItem('openlist.onboardingDone', '1')
+  showOnboarding.value = false
+  await router.push({ name: 'openlist', query: { mode } })
+}
+
+onMounted(async () => {
+  await Promise.all([
+    settingsStore.hydrateFromDatabase(),
+    favoritesStore.hydrateFromDatabase(),
+    historyStore.hydrateFromDatabase(),
+    tasksStore.hydrateFromDatabase()
+  ])
+
+  unlistenTransfer = await listen<TransferProgressPayload>('transfer://progress', (event) => {
+    tasksStore.updateTask(event.payload.id, {
+      status: event.payload.status,
+      progress: event.payload.progress,
+      speed: event.payload.speed,
+      localPath: event.payload.local_path
+    })
+  })
+
+  settingsStore.ensureInstances()
+  const hasToken = await settingsStore.initializeToken()
+  if (!hasToken && localStorage.getItem('openlist.onboardingDone') !== '1') {
+    showOnboarding.value = true
+  }
+  if (!hasToken) return
+
+  await storageStore.loadFromOpenList()
+  if (route.name === 'files' && storageStore.activeStorage) {
+    filesStore.resetToActiveStorage()
+    await filesStore.load(storageStore.activeStorage.mountPath)
+  }
+})
+
+onBeforeUnmount(() => {
+  unlistenTransfer?.()
 })
 </script>

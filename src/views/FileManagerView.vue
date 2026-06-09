@@ -175,6 +175,9 @@
       <n-modal v-model:show="cloudDownloadDialog">
         <n-card class="modal-card" title="云端下载" role="dialog" aria-modal="true">
           <n-space vertical>
+            <n-alert type="info">
+              当前 OpenList 可用云下载工具：{{ cloudTools.length ? cloudTools.join(', ') : '未检测到' }}。未显示 Aria2 表示当前 OpenList 未启用 Aria2。
+            </n-alert>
             <n-input v-model:value="cloudUrls" type="textarea" placeholder="每行一个下载地址" :autosize="{ minRows: 4, maxRows: 8 }" />
             <n-select v-model:value="cloudTool" :options="cloudToolOptions" placeholder="下载工具" />
             <n-input v-model:value="cloudTargetPath" placeholder="保存目录" />
@@ -192,8 +195,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
   NButton,
   NIcon,
@@ -241,7 +246,14 @@ import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useStorageStore } from '@/stores/storage'
 import { useTasksStore } from '@/stores/tasks'
-import { downloadToLocal, downloadToLocalRelative } from '@/services/localFile'
+import {
+  downloadWithEngine,
+  expandUploadPaths,
+  selectUploadFiles,
+  uploadWithEngine,
+  type LocalUploadSelection
+} from '@/services/localFile'
+import { tokenVault } from '@/services/tokenVault'
 import type { TransferTask } from '@/models/task'
 import { formatBytes, formatDate } from '@/utils/format'
 import { dirname, joinPath } from '@/utils/path'
@@ -251,6 +263,10 @@ type DownloadQueueItem = {
   file: ExplorerFileItem
   task: TransferTask
   relativePath?: string
+}
+type UploadQueueItem = {
+  selection: LocalUploadSelection
+  task: TransferTask
 }
 
 const filesStore = useFilesStore()
@@ -281,6 +297,7 @@ const cloudTools = ref<string[]>(['SimpleHttp'])
 const cloudTargetPath = ref('')
 const cloudSubmitting = ref(false)
 const activeFile = ref<ExplorerFileItem | null>(null)
+let unlistenDragDrop: UnlistenFn | null = null
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -374,7 +391,13 @@ const moreOptions = computed<DropdownOption[]>(() => [
   { label: '刷新目录', key: 'refresh', icon: renderIcon(RefreshCw) }
 ])
 
-const cloudToolOptions = computed(() => cloudTools.value.map((tool) => ({ label: tool, value: tool })))
+const cloudToolOptions = computed<Array<{ label: string; value: string; disabled?: boolean }>>(() => {
+  const options: Array<{ label: string; value: string; disabled?: boolean }> = cloudTools.value.map((tool) => ({ label: tool, value: tool }))
+  if (!cloudTools.value.some((tool) => /aria2/i.test(tool))) {
+    options.push({ label: 'Aria2（OpenList 未启用）', value: 'Aria2', disabled: true })
+  }
+  return options
+})
 
 const viewOptions = computed<DropdownOption[]>(() => [
   { label: '列表排列', key: 'rows', icon: renderIcon(Rows3) },
@@ -570,9 +593,7 @@ async function downloadFile(file: ExplorerFileItem, existingTask?: TransferTask,
 
   try {
     tasksStore.updateTask(task.id, { progress: 35 })
-    const result = relativePath
-      ? await downloadToLocalRelative(rawUrl, relativePath, settingsStore.downloadDir)
-      : await downloadToLocal(rawUrl, file.name, settingsStore.downloadDir)
+    const result = await downloadWithEngine(task.id, rawUrl, file.name, settingsStore.downloadDir, relativePath)
     if (tasksStore.taskById(task.id)?.status === 'canceled') return
     tasksStore.updateTask(task.id, { status: 'success', progress: 100, localPath: result.path })
     historyStore.add('download', file.path)
@@ -785,12 +806,30 @@ async function submitTransfer() {
   transferDialog.value = false
 }
 
-function pickFiles() {
-  fileInput.value?.click()
+async function pickFiles() {
+  try {
+    const selections = await selectUploadFiles(false)
+    await uploadLocalSelections(selections)
+  } catch (error) {
+    if (String(error).includes('not implemented') || String(error).includes('__TAURI__')) {
+      fileInput.value?.click()
+      return
+    }
+    message.error(error instanceof Error ? error.message : '无法打开文件选择器')
+  }
 }
 
-function pickDirectory() {
-  directoryInput.value?.click()
+async function pickDirectory() {
+  try {
+    const selections = await selectUploadFiles(true)
+    await uploadLocalSelections(selections)
+  } catch (error) {
+    if (String(error).includes('not implemented') || String(error).includes('__TAURI__')) {
+      directoryInput.value?.click()
+      return
+    }
+    message.error(error instanceof Error ? error.message : '无法打开目录选择器')
+  }
 }
 
 async function handleUpload(event: Event) {
@@ -810,6 +849,78 @@ async function handleDirectoryUpload(event: Event) {
 async function handleDrop(event: DragEvent) {
   dragOver.value = false
   await uploadFiles(Array.from(event.dataTransfer?.files ?? []))
+}
+
+async function uploadLocalPaths(paths: string[]) {
+  if (!paths.length) return
+  try {
+    await uploadLocalSelections(await expandUploadPaths(paths))
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '无法读取拖拽文件')
+  }
+}
+
+async function uploadLocalSelections(selections: LocalUploadSelection[]) {
+  if (!filesStore.currentPath) {
+    message.warning('请先连接 OpenList 并选择上传目录')
+    return
+  }
+  if (!selections.length) return
+
+  const token = await tokenVault.getToken(settingsStore.activeInstanceId)
+  if (!token) {
+    message.warning('请先连接 OpenList')
+    return
+  }
+
+  message.info(`${selections.length} 个文件已加入上传列表`)
+  const ensuredDirs = new Set<string>()
+  async function ensureUploadParent(path: string) {
+    const targetDir = dirname(path)
+    const root = filesStore.currentPath.replace(/\/+$/, '')
+    if (!targetDir || targetDir === filesStore.currentPath || ensuredDirs.has(targetDir)) return
+    const relativeParts = targetDir.startsWith(root)
+      ? targetDir.slice(root.length).split('/').filter(Boolean)
+      : targetDir.split('/').filter(Boolean)
+    let current = root || '/'
+    for (const part of relativeParts) {
+      current = joinPath(current, part)
+      if (ensuredDirs.has(current)) continue
+      try {
+        await fsApi.mkdir(current)
+      } catch {
+        // OpenList returns an error when the directory already exists on some drivers.
+      }
+      ensuredDirs.add(current)
+    }
+  }
+
+  const uploads: UploadQueueItem[] = selections.map((selection) => {
+    const remotePath = joinPath(filesStore.currentPath, selection.relativePath)
+    return {
+      selection,
+      task: tasksStore.addTask('upload', selection.relativePath, remotePath)
+    }
+  })
+
+  await runLimited(uploads, settingsStore.uploadThreads, async ({ selection, task }) => {
+    const canRun = await waitForRunnableTask(task.id)
+    if (!canRun) return
+    try {
+      tasksStore.updateTask(task.id, { status: 'running', progress: 1, localPath: selection.path })
+      await ensureUploadParent(task.path)
+      await uploadWithEngine(task.id, settingsStore.serverUrl, token, selection.path, task.path)
+      if (tasksStore.taskById(task.id)?.status === 'canceled') return
+      tasksStore.updateTask(task.id, { status: 'success', progress: 100, localPath: selection.path })
+      historyStore.add('upload', task.path)
+    } catch (error) {
+      if (tasksStore.taskById(task.id)?.status === 'canceled') return
+      tasksStore.updateTask(task.id, { status: 'failed' })
+      message.error(error instanceof Error ? error.message : '上传失败')
+    }
+  })
+
+  await filesStore.refresh()
 }
 
 async function uploadFiles(pickedFiles: File[], preserveRelativePath = false) {
@@ -871,11 +982,32 @@ async function uploadFiles(pickedFiles: File[], preserveRelativePath = false) {
   if (pickedFiles.length) await filesStore.refresh()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    unlistenDragDrop = await getCurrentWindow().onDragDropEvent(async (event) => {
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        dragOver.value = true
+        return
+      }
+      if (event.payload.type === 'leave') {
+        dragOver.value = false
+        return
+      }
+      dragOver.value = false
+      await uploadLocalPaths(event.payload.paths)
+    })
+  } catch {
+    // Browser preview does not expose Tauri drag/drop events.
+  }
+
   if (storageStore.activeStorage) {
     filesStore.load(storageStore.activeStorage.mountPath)
   } else {
     filesStore.lastError = '请先设置 OpenList 连接'
   }
+})
+
+onBeforeUnmount(() => {
+  unlistenDragDrop?.()
 })
 </script>
