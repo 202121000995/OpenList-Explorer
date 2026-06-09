@@ -74,7 +74,7 @@ export const fsApi = {
     return openListHttp.put('/api/fs/form', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        'File-Path': path
+        'File-Path': encodeURI(path)
       },
       onUploadProgress(event) {
         if (!event.total) return

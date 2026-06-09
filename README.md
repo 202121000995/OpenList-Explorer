@@ -80,6 +80,27 @@ $env:OPENLIST_E2E_PARENT="/某个测试挂载点"
 
 测试会执行 mkdir、upload、list、rename、search、get raw、download probe、delete。请使用可以安全创建和删除文件的测试目录。
 
+如果要从本机 OpenList 可执行文件读取 admin token，可以使用：
+
+```powershell
+$env:OPENLIST_URL="http://127.0.0.1:5244"
+$env:OPENLIST_BIN="D:\wenjian\openlist-windows-amd64\openlist.exe"
+$env:OPENLIST_FORCE_BIN_DIR="1"
+.\scripts\e2e_openlist_smoke.cmd
+```
+
+脚本不会打印 token。未指定 `OPENLIST_E2E_PARENT` 时，会自动尝试根目录下的挂载点，找到可写目录后运行测试。
+
+## P0 Release Check
+
+发布前可以执行：
+
+```powershell
+.\scripts\p0_release_check.cmd
+```
+
+它会检查版本一致性、OpenList/Aria2 sidecar、安装包是否存在、sidecar 是否可执行、内置 OpenList 首次初始化是否能生成管理信息。设置 `OPENLIST_TOKEN` 或 `OPENLIST_BIN` 后，还会自动运行真实 OpenList API smoke test。
+
 ## 发布
 
 发布脚本通过 GitHub CLI 和 GitHub API 上传源码与安装包：

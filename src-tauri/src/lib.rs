@@ -24,6 +24,21 @@ const LEGACY_CREDENTIAL_TARGET: &str = "OpenList Explorer:OpenList API Token";
 const CREDENTIAL_USER: &str = "OpenList Explorer";
 const BUILTIN_ADMIN_PASSWORD_ID: &str = "builtin-local-admin-password";
 
+fn percent_encode_header_path(path: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push(HEX[(byte >> 4) as usize] as char);
+            encoded.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    encoded
+}
+
 #[derive(Serialize)]
 struct BuiltinOpenListStatus {
     available: bool,
@@ -1076,7 +1091,7 @@ async fn upload_with_engine(
     let response = reqwest::Client::new()
         .put(target_url)
         .header("Authorization", token.trim())
-        .header("File-Path", remote_path)
+        .header("File-Path", percent_encode_header_path(&remote_path))
         .multipart(form)
         .send()
         .await

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "OpenList Explorer",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "identifier": "com.openlist.explorer",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,8 +25,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
-    "externalBin": ["binaries/openlist"]
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/openlist",
+      "binaries/aria2c"
+    ]
   }
 }
