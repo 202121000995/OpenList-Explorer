@@ -593,7 +593,7 @@ async function downloadFile(file: ExplorerFileItem, existingTask?: TransferTask,
   }
 
   try {
-    tasksStore.updateTask(task.id, { progress: 35 })
+    tasksStore.updateTask(task.id, { progress: 1, remoteUrl: rawUrl })
     const result = await downloadWithEngine(task.id, rawUrl, file.name, settingsStore.downloadDir, relativePath)
     if (tasksStore.taskById(task.id)?.status === 'canceled') return
     tasksStore.updateTask(task.id, { status: 'success', progress: 100, localPath: result.path })

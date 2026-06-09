@@ -28,6 +28,7 @@ export const tasks = sqliteTable('tasks', {
   path: text('path').notNull(),
   localPath: text('local_path'),
   remoteId: text('remote_id'),
+  remoteUrl: text('remote_url'),
   source: text('source'),
   message: text('message'),
   name: text('name').notNull(),

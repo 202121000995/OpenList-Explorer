@@ -11,6 +11,7 @@ export interface TransferTask {
   path: string
   localPath?: string
   remoteId?: string
+  remoteUrl?: string
   source?: TransferSource
   message?: string
   name: string

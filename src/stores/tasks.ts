@@ -40,7 +40,10 @@ export const useTasksStore = defineStore('tasks', () => {
     return task
   }
 
-  function updateTask(id: string, patch: Partial<Pick<TransferTask, 'status' | 'progress' | 'speed' | 'localPath'>>) {
+  function updateTask(
+    id: string,
+    patch: Partial<Pick<TransferTask, 'status' | 'progress' | 'speed' | 'localPath' | 'remoteUrl' | 'message'>>
+  ) {
     const task = tasks.value.find((item) => item.id === id)
     if (!task) return
     Object.assign(task, patch, { updatedAt: Date.now() })

@@ -93,6 +93,7 @@ struct TaskRow {
     path: String,
     local_path: Option<String>,
     remote_id: Option<String>,
+    remote_url: Option<String>,
     source: Option<String>,
     message: Option<String>,
     name: String,
@@ -196,6 +197,7 @@ fn open_database(app: &AppHandle) -> Result<Connection, String> {
                 path TEXT NOT NULL,
                 local_path TEXT,
                 remote_id TEXT,
+                remote_url TEXT,
                 source TEXT,
                 message TEXT,
                 name TEXT NOT NULL,
@@ -205,6 +207,7 @@ fn open_database(app: &AppHandle) -> Result<Connection, String> {
             [],
         )
         .map_err(|error| format!("无法初始化 tasks 表: {error}"))?;
+    let _ = connection.execute("ALTER TABLE tasks ADD COLUMN remote_url TEXT", []);
     Ok(connection)
 }
 
@@ -662,7 +665,7 @@ fn db_get_tasks(app: AppHandle) -> Result<Vec<TaskRow>, String> {
     let connection = open_database(&app)?;
     let mut statement = connection
         .prepare(
-            "SELECT id, type, status, progress, speed, path, local_path, remote_id, source, message, name, created_at, updated_at
+            "SELECT id, type, status, progress, speed, path, local_path, remote_id, remote_url, source, message, name, created_at, updated_at
              FROM tasks ORDER BY created_at DESC",
         )
         .map_err(|error| format!("无法读取 tasks 表: {error}"))?;
@@ -677,11 +680,12 @@ fn db_get_tasks(app: AppHandle) -> Result<Vec<TaskRow>, String> {
                 path: row.get(5)?,
                 local_path: row.get(6)?,
                 remote_id: row.get(7)?,
-                source: row.get(8)?,
-                message: row.get(9)?,
-                name: row.get(10)?,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
+                remote_url: row.get(8)?,
+                source: row.get(9)?,
+                message: row.get(10)?,
+                name: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
             })
         })
         .map_err(|error| format!("无法查询 tasks 表: {error}"))?;
@@ -700,8 +704,8 @@ fn db_replace_tasks(app: AppHandle, items: Vec<TaskRow>) -> Result<(), String> {
     for item in items {
         transaction
             .execute(
-                "INSERT INTO tasks(id, type, status, progress, speed, path, local_path, remote_id, source, message, name, created_at, updated_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                "INSERT INTO tasks(id, type, status, progress, speed, path, local_path, remote_id, remote_url, source, message, name, created_at, updated_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     item.id,
                     item.kind,
@@ -711,6 +715,7 @@ fn db_replace_tasks(app: AppHandle, items: Vec<TaskRow>) -> Result<(), String> {
                     item.path,
                     item.local_path,
                     item.remote_id,
+                    item.remote_url,
                     item.source,
                     item.message,
                     item.name,
