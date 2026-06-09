@@ -22,6 +22,7 @@ EXCLUDED_DIRS = {
     ".agents",
     ".codex",
     "login_gate_rewrite",
+    "data",
     "node_modules",
     "dist",
     "target",
