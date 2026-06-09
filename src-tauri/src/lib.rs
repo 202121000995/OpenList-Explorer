@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    io,
     fs,
     net::{TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
@@ -9,9 +10,11 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use bytes::Bytes;
+use futures_util::stream;
 use tauri::{AppHandle, Emitter, Manager};
 use rusqlite::{params, Connection};
-use tokio::{io::AsyncWriteExt, time::sleep};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
 
 const OPENLIST_BINS: [&str; 2] = ["openlist.exe", "openlist-x86_64-pc-windows-msvc.exe"];
 const ARIA2_BINS: [&str; 2] = ["aria2c.exe", "aria2c-x86_64-pc-windows-msvc.exe"];
@@ -394,6 +397,12 @@ fn unique_path(dir: &Path, filename: &str) -> PathBuf {
     }
 
     dir.join(filename)
+}
+
+fn part_path_for(path: &Path) -> PathBuf {
+    let mut value = path.as_os_str().to_os_string();
+    value.push(".part");
+    PathBuf::from(value)
 }
 
 fn clean_relative_path(relative_path: &str, fallback_filename: &str) -> PathBuf {
@@ -839,17 +848,37 @@ async fn download_with_engine(
         .await
         .map_err(|error| format!("无法创建下载目录: {error}"))?;
     let path = unique_path(&target_dir, &file_name);
-    let mut file = tokio::fs::File::create(&path)
+    let part_path = part_path_for(&path);
+    let existing = tokio::fs::metadata(&part_path).await.map(|metadata| metadata.len()).unwrap_or(0);
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(existing > 0)
+        .write(true)
+        .truncate(existing == 0)
+        .open(&part_path)
         .await
         .map_err(|error| format!("无法创建下载文件: {error}"))?;
 
-    let response = reqwest::get(&url)
+    let client = reqwest::Client::new();
+    let mut request = client.get(&url);
+    if existing > 0 {
+        request = request.header("Range", format!("bytes={existing}-"));
+    }
+    let response = request
+        .send()
         .await
         .map_err(|error| format!("下载请求失败: {error}"))?
         .error_for_status()
         .map_err(|error| format!("下载地址不可用: {error}"))?;
-    let total = response.content_length().unwrap_or(0);
-    let mut downloaded = 0_u64;
+    let accepts_resume = existing > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+    if existing > 0 && !accepts_resume {
+        file.set_len(0)
+            .await
+            .map_err(|error| format!("无法重置断点文件: {error}"))?;
+    }
+    let offset = if accepts_resume { existing } else { 0 };
+    let total = response.content_length().map(|length| length + offset).unwrap_or(0);
+    let mut downloaded = offset;
     let started = Instant::now();
     let mut response = response;
 
@@ -861,7 +890,6 @@ async fn download_with_engine(
         loop {
             let control = transfer_control_snapshot(&id)?;
             if control.canceled {
-                let _ = tokio::fs::remove_file(&path).await;
                 let _ = app.emit(
                     "transfer://progress",
                     TransferProgress {
@@ -915,6 +943,10 @@ async fn download_with_engine(
     file.flush()
         .await
         .map_err(|error| format!("保存下载文件失败: {error}"))?;
+    drop(file);
+    tokio::fs::rename(&part_path, &path)
+        .await
+        .map_err(|error| format!("无法完成断点文件重命名: {error}"))?;
     let local_path = path.display().to_string();
     let _ = app.emit(
         "transfer://progress",
@@ -969,22 +1001,73 @@ async fn upload_with_engine(
         sleep(Duration::from_millis(250)).await;
     }
 
-    emit_transfer(&app, &id, "running", 5, 0, None);
+    emit_transfer(&app, &id, "running", 1, 0, None);
     let started = Instant::now();
     let filename = local
         .file_name()
         .and_then(|value| value.to_str())
         .map(str::to_string)
         .unwrap_or_else(|| "upload.bin".to_string());
-    let part = reqwest::multipart::Part::file(&local)
+    let file = tokio::fs::File::open(&local)
         .await
-        .map_err(|error| format!("无法读取本地上传文件: {error}"))?
-        .file_name(filename);
+        .map_err(|error| format!("无法打开本地上传文件: {error}"))?;
+    let stream_app = app.clone();
+    let stream_id = id.clone();
+    let upload_stream = stream::unfold((file, 0_u64, started), move |(mut file, mut uploaded, started)| {
+        let app = stream_app.clone();
+        let id = stream_id.clone();
+        async move {
+            loop {
+                let control = match transfer_control_snapshot(&id) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        return Some((Err(io::Error::new(io::ErrorKind::Other, error)), (file, uploaded, started)));
+                    }
+                };
+                if control.canceled {
+                    emit_transfer(&app, &id, "canceled", 0, 0, None);
+                    return Some((
+                        Err(io::Error::new(io::ErrorKind::Interrupted, "上传已取消")),
+                        (file, uploaded, started),
+                    ));
+                }
+                if !control.paused {
+                    break;
+                }
+                let progress = if size > 0 {
+                    ((uploaded.saturating_mul(100) / size).min(99)) as u8
+                } else {
+                    0
+                };
+                emit_transfer(&app, &id, "paused", progress, 0, None);
+                sleep(Duration::from_millis(250)).await;
+            }
+
+            let mut buffer = vec![0_u8; 256 * 1024];
+            match file.read(&mut buffer).await {
+                Ok(0) => None,
+                Ok(read) => {
+                    buffer.truncate(read);
+                    uploaded += read as u64;
+                    let elapsed = started.elapsed().as_secs().max(1);
+                    let progress = if size > 0 {
+                        ((uploaded.saturating_mul(100) / size).min(99)) as u8
+                    } else {
+                        0
+                    };
+                    emit_transfer(&app, &id, "running", progress, uploaded / elapsed, None);
+                    Some((Ok::<Bytes, io::Error>(Bytes::from(buffer)), (file, uploaded, started)))
+                }
+                Err(error) => Some((Err(error), (file, uploaded, started))),
+            }
+        }
+    });
+    let body = reqwest::Body::wrap_stream(upload_stream);
+    let part = reqwest::multipart::Part::stream_with_length(body, size).file_name(filename);
     let form = reqwest::multipart::Form::new().part("file", part);
     let base_url = server_url.trim().trim_end_matches('/');
     let target_url = format!("{base_url}/api/fs/form");
 
-    emit_transfer(&app, &id, "running", 20, 0, None);
     let response = reqwest::Client::new()
         .put(target_url)
         .header("Authorization", token.trim())
@@ -992,7 +1075,13 @@ async fn upload_with_engine(
         .multipart(form)
         .send()
         .await
-        .map_err(|error| format!("上传请求失败: {error}"))?;
+        .map_err(|error| {
+            if transfer_control_snapshot(&id).map(|control| control.canceled).unwrap_or(false) {
+                "上传已取消".to_string()
+            } else {
+                format!("上传请求失败: {error}")
+            }
+        })?;
     let status = response.status();
     let text = response
         .text()

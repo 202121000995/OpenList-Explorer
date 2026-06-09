@@ -60,6 +60,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
     key: 'actions',
     width: 212,
     render(row) {
+      const localControllable = row.source !== 'openlist-offline'
       return h(NSpace, { justify: 'end', size: 6 }, () => [
         h(
           NButton,
@@ -68,17 +69,17 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, onClick: () => emit('pause', row.id) },
+          { circle: true, size: 'small', secondary: true, disabled: !localControllable, onClick: () => emit('pause', row.id) },
           { icon: () => h(Pause, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, onClick: () => emit('resume', row.id) },
+          { circle: true, size: 'small', secondary: true, disabled: !localControllable, onClick: () => emit('resume', row.id) },
           { icon: () => h(Play, { size: 15 }) }
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, type: 'error', onClick: () => emit('cancel', row.id) },
+          { circle: true, size: 'small', secondary: true, type: 'error', disabled: !localControllable, onClick: () => emit('cancel', row.id) },
           { icon: () => h(X, { size: 15 }) }
         ),
         h(
