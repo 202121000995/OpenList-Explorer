@@ -108,6 +108,7 @@
       <input ref="directoryInput" class="hidden-input" multiple type="file" webkitdirectory @change="handleDirectoryUpload" />
 
       <n-data-table
+        v-if="viewMode === 'rows'"
         v-model:checked-row-keys="filesStore.selectedPaths"
         class="file-table explorer-table"
         :columns="columns"
@@ -121,6 +122,49 @@
         virtual-scroll
         max-height="calc(100vh - 206px)"
       />
+
+      <div v-else class="file-grid-panel">
+        <div v-if="filesStore.loading" class="file-grid-state">正在加载...</div>
+        <div v-else-if="!filesStore.sortedFiles.length" class="file-grid-state">当前目录为空</div>
+        <div v-else class="file-grid">
+          <div
+            v-for="file in filesStore.sortedFiles"
+            :key="file.path"
+            class="file-grid-card"
+            :class="{ selected: isSelected(file) }"
+            @dblclick="openItem(file)"
+            @contextmenu.prevent="showFileContext(file, $event)"
+          >
+            <input
+              class="file-grid-check"
+              type="checkbox"
+              :checked="isSelected(file)"
+              :aria-label="`选择 ${file.name}`"
+              @click.stop
+              @change="toggleRowSelection(file)"
+            />
+            <component
+              :is="fileIcon(file).component"
+              :size="34"
+              :class="[fileIcon(file).className, file.type === 'folder' ? 'selectable-folder-icon' : '']"
+              @click.stop="toggleRowSelection(file)"
+            />
+            <button
+              class="file-grid-name"
+              :class="{ 'folder-name-button': file.type === 'folder' }"
+              type="button"
+              :title="file.name"
+              @click.stop="file.type === 'folder' ? openItem(file) : undefined"
+            >
+              {{ file.name }}
+            </button>
+            <span class="file-grid-meta">{{ file.type === 'folder' ? '文件夹' : formatBytes(file.size) }}</span>
+            <button class="file-grid-more" type="button" @click.stop="openRowActions(file, $event)">
+              <Ellipsis :size="15" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <n-dropdown
         trigger="manual"
@@ -298,6 +342,7 @@ const cloudTools = ref<string[]>(['SimpleHttp'])
 const cloudTargetPath = ref('')
 const cloudSubmitting = ref(false)
 const activeFile = ref<ExplorerFileItem | null>(null)
+const viewMode = ref<'rows' | 'grid'>('rows')
 let unlistenDragDrop: UnlistenFn | null = null
 
 function delay(ms: number) {
@@ -401,8 +446,8 @@ const cloudToolOptions = computed<Array<{ label: string; value: string; disabled
 })
 
 const viewOptions = computed<DropdownOption[]>(() => [
-  { label: '列表排列', key: 'rows', icon: renderIcon(Rows3) },
-  { label: '网格排列', key: 'grid', icon: renderIcon(Grid2X2), disabled: true }
+  { label: viewMode.value === 'rows' ? '列表排列（当前）' : '列表排列', key: 'rows', icon: renderIcon(Rows3) },
+  { label: viewMode.value === 'grid' ? '网格排列（当前）' : '网格排列', key: 'grid', icon: renderIcon(Grid2X2) }
 ])
 
 const contextOptions = computed<DropdownOption[]>(() => {
@@ -526,21 +571,26 @@ function rowProps(row: ExplorerFileItem) {
     onDblclick: () => openItem(row),
     onContextmenu: (event: MouseEvent) => {
       event.preventDefault()
-      activeFile.value = row
-      contextMenu.show = false
-      requestAnimationFrame(() => {
-        contextMenu.x = event.clientX
-        contextMenu.y = event.clientY
-        contextMenu.show = true
-      })
+      showFileContext(row, event)
     }
   }
 }
 
-function openRowActions(row: ExplorerFileItem) {
+function showFileContext(row: ExplorerFileItem, event: MouseEvent) {
   activeFile.value = row
   contextMenu.show = false
-  const button = document.activeElement?.getBoundingClientRect()
+  requestAnimationFrame(() => {
+    contextMenu.x = event.clientX
+    contextMenu.y = event.clientY
+    contextMenu.show = true
+  })
+}
+
+function openRowActions(row: ExplorerFileItem, event?: MouseEvent) {
+  activeFile.value = row
+  contextMenu.show = false
+  const target = event?.currentTarget instanceof HTMLElement ? event.currentTarget : document.activeElement
+  const button = target instanceof HTMLElement ? target.getBoundingClientRect() : null
   requestAnimationFrame(() => {
     contextMenu.x = button ? button.left : window.innerWidth - 120
     contextMenu.y = button ? button.bottom + 6 : 120
@@ -550,6 +600,10 @@ function openRowActions(row: ExplorerFileItem) {
 
 function getRowKey(row: ExplorerFileItem) {
   return row.path
+}
+
+function isSelected(row: ExplorerFileItem) {
+  return filesStore.selectedPaths.includes(row.path)
 }
 
 function toggleRowSelection(row: ExplorerFileItem) {
@@ -659,7 +713,7 @@ function handleMoreSelect(key: string) {
 }
 
 function handleViewSelect(key: string) {
-  if (key === 'rows') message.info('当前使用列表排列')
+  if (key === 'rows' || key === 'grid') viewMode.value = key
 }
 
 async function handleContextSelect(key: string) {

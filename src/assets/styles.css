@@ -653,6 +653,106 @@ button {
   box-shadow: var(--app-shadow);
 }
 
+.file-grid-panel {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-elevated);
+  box-shadow: var(--app-shadow);
+}
+
+.file-grid-state {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  color: var(--app-muted);
+  font-weight: 650;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+
+.file-grid-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: 42px minmax(20px, auto) 18px;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 118px;
+  padding: 12px 30px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--app-text);
+}
+
+.file-grid-card:hover {
+  background: var(--app-hover);
+}
+
+.file-grid-card.selected {
+  border-color: color-mix(in srgb, var(--app-primary) 36%, transparent);
+  background: var(--app-active);
+}
+
+.file-grid-check {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+.file-grid-name {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-grid-meta {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-grid-more {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.file-grid-more:hover {
+  color: var(--app-primary);
+  background: var(--app-elevated);
+}
+
 .explorer-table .n-data-table-th,
 .explorer-table .n-data-table-td {
   background: transparent;

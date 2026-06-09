@@ -12,9 +12,10 @@ from pathlib import Path
 OWNER = "202121000995"
 REPO = "OpenList-Explorer"
 BRANCH = "main"
-TAG = "v0.1.6"
 ROOT = Path(__file__).resolve().parents[1]
-INSTALLER = ROOT / "src-tauri" / "target" / "release" / "bundle" / "nsis" / "OpenList Explorer_0.1.6_x64-setup.exe"
+APP_VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+TAG = f"v{APP_VERSION}"
+INSTALLER = ROOT / "src-tauri" / "target" / "release" / "bundle" / "nsis" / f"OpenList Explorer_{APP_VERSION}_x64-setup.exe"
 
 EXCLUDED_DIRS = {
     ".git",
@@ -224,7 +225,7 @@ def ensure_release(commit_sha: str):
         {
             "tag_name": TAG,
             "target_commitish": commit_sha,
-            "name": "OpenList Explorer 0.1.6",
+            "name": f"OpenList Explorer {APP_VERSION}",
             "body": body,
             "draft": False,
             "prerelease": True,

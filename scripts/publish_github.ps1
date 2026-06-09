@@ -1,10 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_0.1.6_x64-setup.exe"
+$PackageJson = Get-Content -Raw -Encoding UTF8 (Join-Path $ProjectRoot "package.json") | ConvertFrom-Json
+$Version = $PackageJson.version
+$Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_$($Version)_x64-setup.exe"
 $Publisher = Join-Path $ProjectRoot "scripts\publish_github.py"
 
 Write-Host "Project:   $ProjectRoot"
+Write-Host "Version:   $Version"
 Write-Host "Installer: $Installer"
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
