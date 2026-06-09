@@ -1,8 +1,20 @@
 import { computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
-import { dbGetJson, dbSetJson } from '@/services/database'
-import type { TransferStatus, TransferTask, TransferType } from '@/models/task'
+import { dbGetJson, dbGetTasks, dbReplaceTasks } from '@/services/database'
+import type { TransferSource, TransferStatus, TransferTask, TransferType } from '@/models/task'
+
+interface UpsertRemoteTaskPayload {
+  remoteId: string
+  source: TransferSource
+  type: TransferType
+  name: string
+  path: string
+  status: TransferStatus
+  progress: number
+  speed?: number
+  message?: string
+}
 
 export const useTasksStore = defineStore('tasks', () => {
   const tasks = useStorage<TransferTask[]>('openlist.tasks', [])
@@ -20,7 +32,9 @@ export const useTasksStore = defineStore('tasks', () => {
       speed: 0,
       path,
       name,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      source: 'local'
     }
     tasks.value.unshift(task)
     return task
@@ -29,7 +43,40 @@ export const useTasksStore = defineStore('tasks', () => {
   function updateTask(id: string, patch: Partial<Pick<TransferTask, 'status' | 'progress' | 'speed' | 'localPath'>>) {
     const task = tasks.value.find((item) => item.id === id)
     if (!task) return
-    Object.assign(task, patch)
+    Object.assign(task, patch, { updatedAt: Date.now() })
+  }
+
+  function upsertRemoteTask(payload: UpsertRemoteTaskPayload) {
+    const task = tasks.value.find((item) => item.source === payload.source && item.remoteId === payload.remoteId)
+    if (task) {
+      Object.assign(task, {
+        name: payload.name || task.name,
+        path: payload.path || task.path,
+        status: payload.status,
+        progress: payload.progress,
+        speed: payload.speed ?? task.speed,
+        message: payload.message,
+        updatedAt: Date.now()
+      })
+      return task
+    }
+
+    const next: TransferTask = {
+      id: `${payload.source}:${payload.remoteId}`,
+      remoteId: payload.remoteId,
+      source: payload.source,
+      type: payload.type,
+      status: payload.status,
+      progress: payload.progress,
+      speed: payload.speed ?? 0,
+      path: payload.path,
+      name: payload.name,
+      message: payload.message,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    tasks.value.unshift(next)
+    return next
   }
 
   function taskById(id: string) {
@@ -49,13 +96,13 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   async function hydrateFromDatabase() {
-    const saved = await dbGetJson<TransferTask[]>('tasks')
+    const saved = (await dbGetTasks()) ?? (await dbGetJson<TransferTask[]>('tasks'))
     if (saved) tasks.value = saved
     hydrated = true
   }
 
   watch(tasks, (value) => {
-    if (hydrated) dbSetJson('tasks', value)
+    if (hydrated) dbReplaceTasks(value)
   }, { deep: true })
 
   return {
@@ -68,6 +115,7 @@ export const useTasksStore = defineStore('tasks', () => {
     setStatus,
     removeTask,
     clearTasks,
+    upsertRemoteTask,
     hydrateFromDatabase
   }
 })

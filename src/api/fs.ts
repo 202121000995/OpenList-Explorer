@@ -15,6 +15,22 @@ export interface OfflineDownloadPayload {
   delete_policy: 'delete_on_upload_succeed' | 'delete_never'
 }
 
+export interface OpenListTaskItem {
+  id?: string
+  tid?: string
+  name?: string
+  state?: string
+  status?: string
+  progress?: number
+  percentage?: number
+  speed?: number
+  path?: string
+  dst?: string
+  error?: string
+  err?: string
+  [key: string]: unknown
+}
+
 export const fsApi = {
   list(payload: FileListRequest) {
     return openListHttp.post<unknown, FileListResponse>('/api/fs/list', payload)
@@ -73,5 +89,13 @@ export const fsApi = {
 
   offlineDownloadTools() {
     return openListHttp.get<unknown, string[]>('/api/public/offline_download_tools')
+  },
+
+  offlineDownloadUndoneTasks() {
+    return openListHttp.get<unknown, OpenListTaskItem[]>('/api/admin/task/offline_download/undone')
+  },
+
+  offlineDownloadDoneTasks() {
+    return openListHttp.get<unknown, OpenListTaskItem[]>('/api/admin/task/offline_download/done')
   }
 }

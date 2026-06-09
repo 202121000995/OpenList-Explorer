@@ -7,23 +7,30 @@ export const settings = sqliteTable('settings', {
 })
 
 export const favorites = sqliteTable('favorites', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  id: text('id').primaryKey(),
   storage: text('storage').notNull(),
   path: text('path').notNull()
 })
 
 export const history = sqliteTable('history', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  id: text('id').primaryKey(),
   type: text('type').notNull(),
   path: text('path').notNull(),
   time: integer('time').notNull()
 })
 
 export const tasks = sqliteTable('tasks', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  id: text('id').primaryKey(),
   type: text('type').notNull(),
   status: text('status').notNull(),
   progress: integer('progress').notNull(),
   speed: integer('speed').notNull(),
-  path: text('path').notNull()
+  path: text('path').notNull(),
+  localPath: text('local_path'),
+  remoteId: text('remote_id'),
+  source: text('source'),
+  message: text('message'),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at')
 })

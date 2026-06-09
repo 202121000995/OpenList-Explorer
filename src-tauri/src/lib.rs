@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
@@ -60,6 +60,41 @@ struct LocalUploadSelection {
     path: String,
     relative_path: String,
     size: u64,
+}
+
+#[derive(Deserialize, Serialize)]
+struct FavoriteRow {
+    id: String,
+    storage: String,
+    path: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct HistoryRow {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    path: String,
+    time: i64,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskRow {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    status: String,
+    progress: i64,
+    speed: i64,
+    path: String,
+    local_path: Option<String>,
+    remote_id: Option<String>,
+    source: Option<String>,
+    message: Option<String>,
+    name: String,
+    created_at: i64,
+    updated_at: Option<i64>,
 }
 
 #[derive(Default, Clone)]
@@ -126,6 +161,47 @@ fn open_database(app: &AppHandle) -> Result<Connection, String> {
             [],
         )
         .map_err(|error| format!("无法初始化 SQLite: {error}"))?;
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS favorites (
+                id TEXT PRIMARY KEY NOT NULL,
+                storage TEXT NOT NULL,
+                path TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|error| format!("无法初始化 favorites 表: {error}"))?;
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS history (
+                id TEXT PRIMARY KEY NOT NULL,
+                type TEXT NOT NULL,
+                path TEXT NOT NULL,
+                time INTEGER NOT NULL
+            )",
+            [],
+        )
+        .map_err(|error| format!("无法初始化 history 表: {error}"))?;
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                progress INTEGER NOT NULL,
+                speed INTEGER NOT NULL,
+                path TEXT NOT NULL,
+                local_path TEXT,
+                remote_id TEXT,
+                source TEXT,
+                message TEXT,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER
+            )",
+            [],
+        )
+        .map_err(|error| format!("无法初始化 tasks 表: {error}"))?;
     Ok(connection)
 }
 
@@ -168,6 +244,35 @@ fn openlist_binary(app: &AppHandle) -> Option<PathBuf> {
 fn aria2_binary(app: &AppHandle) -> Option<PathBuf> {
     candidate_named_binaries(app, &ARIA2_BINS)
         .into_iter()
+        .find(|path| path.exists())
+        .or_else(find_aria2_in_path)
+}
+
+#[cfg(windows)]
+fn find_aria2_in_path() -> Option<PathBuf> {
+    let output = hidden_program("where.exe").arg("aria2c.exe").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .find(|path| path.exists())
+}
+
+#[cfg(not(windows))]
+fn find_aria2_in_path() -> Option<PathBuf> {
+    let output = Command::new("which").arg("aria2c").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
         .find(|path| path.exists())
 }
 
@@ -461,6 +566,152 @@ fn db_set_json(app: AppHandle, key: String, value: String) -> Result<(), String>
             params![key, value],
         )
         .map_err(|error| format!("无法写入 SQLite: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn db_get_favorites(app: AppHandle) -> Result<Vec<FavoriteRow>, String> {
+    let connection = open_database(&app)?;
+    let mut statement = connection
+        .prepare("SELECT id, storage, path FROM favorites ORDER BY rowid DESC")
+        .map_err(|error| format!("无法读取 favorites 表: {error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(FavoriteRow {
+                id: row.get(0)?,
+                storage: row.get(1)?,
+                path: row.get(2)?,
+            })
+        })
+        .map_err(|error| format!("无法查询 favorites 表: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("无法解析 favorites 表: {error}"))
+}
+
+#[tauri::command]
+fn db_replace_favorites(app: AppHandle, items: Vec<FavoriteRow>) -> Result<(), String> {
+    let mut connection = open_database(&app)?;
+    let transaction = connection.transaction().map_err(|error| format!("无法写入 favorites 表: {error}"))?;
+    transaction
+        .execute("DELETE FROM favorites", [])
+        .map_err(|error| format!("无法清空 favorites 表: {error}"))?;
+    for item in items {
+        transaction
+            .execute(
+                "INSERT INTO favorites(id, storage, path) VALUES(?1, ?2, ?3)",
+                params![item.id, item.storage, item.path],
+            )
+            .map_err(|error| format!("无法写入 favorites 表: {error}"))?;
+    }
+    transaction.commit().map_err(|error| format!("无法提交 favorites 表: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn db_get_history(app: AppHandle) -> Result<Vec<HistoryRow>, String> {
+    let connection = open_database(&app)?;
+    let mut statement = connection
+        .prepare("SELECT id, type, path, time FROM history ORDER BY time DESC LIMIT 100")
+        .map_err(|error| format!("无法读取 history 表: {error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(HistoryRow {
+                id: row.get(0)?,
+                kind: row.get(1)?,
+                path: row.get(2)?,
+                time: row.get(3)?,
+            })
+        })
+        .map_err(|error| format!("无法查询 history 表: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("无法解析 history 表: {error}"))
+}
+
+#[tauri::command]
+fn db_replace_history(app: AppHandle, items: Vec<HistoryRow>) -> Result<(), String> {
+    let mut connection = open_database(&app)?;
+    let transaction = connection.transaction().map_err(|error| format!("无法写入 history 表: {error}"))?;
+    transaction
+        .execute("DELETE FROM history", [])
+        .map_err(|error| format!("无法清空 history 表: {error}"))?;
+    for item in items {
+        transaction
+            .execute(
+                "INSERT INTO history(id, type, path, time) VALUES(?1, ?2, ?3, ?4)",
+                params![item.id, item.kind, item.path, item.time],
+            )
+            .map_err(|error| format!("无法写入 history 表: {error}"))?;
+    }
+    transaction.commit().map_err(|error| format!("无法提交 history 表: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn db_get_tasks(app: AppHandle) -> Result<Vec<TaskRow>, String> {
+    let connection = open_database(&app)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT id, type, status, progress, speed, path, local_path, remote_id, source, message, name, created_at, updated_at
+             FROM tasks ORDER BY created_at DESC",
+        )
+        .map_err(|error| format!("无法读取 tasks 表: {error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(TaskRow {
+                id: row.get(0)?,
+                kind: row.get(1)?,
+                status: row.get(2)?,
+                progress: row.get(3)?,
+                speed: row.get(4)?,
+                path: row.get(5)?,
+                local_path: row.get(6)?,
+                remote_id: row.get(7)?,
+                source: row.get(8)?,
+                message: row.get(9)?,
+                name: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+            })
+        })
+        .map_err(|error| format!("无法查询 tasks 表: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("无法解析 tasks 表: {error}"))
+}
+
+#[tauri::command]
+fn db_replace_tasks(app: AppHandle, items: Vec<TaskRow>) -> Result<(), String> {
+    let mut connection = open_database(&app)?;
+    let transaction = connection.transaction().map_err(|error| format!("无法写入 tasks 表: {error}"))?;
+    transaction
+        .execute("DELETE FROM tasks", [])
+        .map_err(|error| format!("无法清空 tasks 表: {error}"))?;
+    for item in items {
+        transaction
+            .execute(
+                "INSERT INTO tasks(id, type, status, progress, speed, path, local_path, remote_id, source, message, name, created_at, updated_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                params![
+                    item.id,
+                    item.kind,
+                    item.status,
+                    item.progress,
+                    item.speed,
+                    item.path,
+                    item.local_path,
+                    item.remote_id,
+                    item.source,
+                    item.message,
+                    item.name,
+                    item.created_at,
+                    item.updated_at
+                ],
+            )
+            .map_err(|error| format!("无法写入 tasks 表: {error}"))?;
+    }
+    transaction.commit().map_err(|error| format!("无法提交 tasks 表: {error}"))?;
     Ok(())
 }
 
@@ -982,6 +1233,53 @@ fn local_aria2_status(app: AppHandle) -> Result<LocalAria2Status, String> {
 }
 
 #[tauri::command]
+fn start_local_aria2(app: AppHandle) -> Result<LocalAria2Status, String> {
+    let binary = aria2_binary(&app).ok_or_else(|| {
+        "未找到 aria2c.exe。请把 aria2c.exe 放到安装目录、安装目录的 binaries 子目录，或加入系统 PATH。".to_string()
+    })?;
+
+    if !is_local_port_open(6800) {
+        let aria2_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| format!("无法获取应用数据目录: {error}"))?
+            .join("aria2");
+        fs::create_dir_all(&aria2_dir).map_err(|error| format!("无法创建 Aria2 数据目录: {error}"))?;
+        let session_path = aria2_dir.join("aria2.session");
+        if !session_path.exists() {
+            fs::write(&session_path, "").map_err(|error| format!("无法创建 Aria2 session 文件: {error}"))?;
+        }
+
+        hidden_command(&binary)
+            .args([
+                "--enable-rpc=true",
+                "--rpc-listen-all=false",
+                "--rpc-listen-port=6800",
+                "--continue=true",
+                "--max-concurrent-downloads=5",
+                "--split=8",
+                "--max-connection-per-server=8",
+                "--auto-file-renaming=true",
+                "--save-session-interval=30",
+            ])
+            .arg(format!("--dir={}", default_download_dir().display()))
+            .arg(format!("--input-file={}", session_path.display()))
+            .arg(format!("--save-session={}", session_path.display()))
+            .spawn()
+            .map_err(|error| format!("无法启动 Aria2: {error}"))?;
+
+        for _ in 0..20 {
+            if is_local_port_open(6800) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(250));
+        }
+    }
+
+    local_aria2_status(app)
+}
+
+#[tauri::command]
 fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, String> {
     let binary = openlist_binary(&app).ok_or_else(|| "安装包中未找到内置 OpenList".to_string())?;
     let data_dir = app_data_dir(&app)?;
@@ -1023,6 +1321,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             builtin_openlist_status,
             local_aria2_status,
+            start_local_aria2,
             start_builtin_openlist,
             save_openlist_token,
             read_openlist_token,
@@ -1031,6 +1330,12 @@ pub fn run() {
             expand_upload_paths,
             db_get_json,
             db_set_json,
+            db_get_favorites,
+            db_replace_favorites,
+            db_get_history,
+            db_replace_history,
+            db_get_tasks,
+            db_replace_tasks,
             default_download_path,
             download_to_local,
             download_to_local_relative,

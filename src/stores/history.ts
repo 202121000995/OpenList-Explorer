@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { watch } from 'vue'
-import { dbGetJson, dbSetJson } from '@/services/database'
+import { dbGetHistory, dbGetJson, dbReplaceHistory } from '@/services/database'
 
 export interface HistoryEntry {
   id: string
@@ -25,13 +25,13 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function hydrateFromDatabase() {
-    const saved = await dbGetJson<HistoryEntry[]>('history')
+    const saved = (await dbGetHistory()) ?? (await dbGetJson<HistoryEntry[]>('history'))
     if (saved) items.value = saved
     hydrated = true
   }
 
   watch(items, (value) => {
-    if (hydrated) dbSetJson('history', value)
+    if (hydrated) dbReplaceHistory(value)
   }, { deep: true })
 
   return { items, add, hydrateFromDatabase }

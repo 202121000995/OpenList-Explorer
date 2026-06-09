@@ -26,6 +26,20 @@
             placeholder="公网地址"
             @update:value="settingsStore.updateInstance(instance.id, { publicBaseUrl: $event })"
           />
+          <span
+            class="instance-status"
+            :class="instance.lastStatus || 'unknown'"
+            :title="instance.lastConnectedAt ? `最后连接：${formatInstanceTime(instance.lastConnectedAt)}` : '尚未成功连接'"
+          >
+            {{ instanceStatusLabel(instance.lastStatus) }}
+          </span>
+          <n-button
+            secondary
+            :type="instance.id === settingsStore.defaultInstanceId ? 'primary' : 'default'"
+            @click="setDefaultInstance(instance.id)"
+          >
+            {{ instance.id === settingsStore.defaultInstanceId ? '默认' : '设默认' }}
+          </n-button>
           <n-button
             secondary
             :type="instance.id === settingsStore.activeInstanceId ? 'primary' : 'default'"
@@ -70,11 +84,17 @@
               <n-descriptions-item label="内置程序">{{ builtinStatus?.available ? '已包含' : '未找到' }}</n-descriptions-item>
               <n-descriptions-item v-if="builtinStatus?.data_dir" label="数据目录">{{ builtinStatus.data_dir }}</n-descriptions-item>
               <n-descriptions-item v-if="builtinAdminPassword" label="Web 管理账号">admin</n-descriptions-item>
-              <n-descriptions-item v-if="builtinAdminPassword" label="Web 管理密码">{{ builtinAdminPassword }}</n-descriptions-item>
+              <n-descriptions-item v-if="builtinAdminPassword" label="Web 管理密码">
+                <span class="secret-row">
+                  <span>{{ builtinAdminPassword }}</span>
+                  <n-button size="tiny" secondary @click="copyBuiltinAdminPassword">复制</n-button>
+                </span>
+              </n-descriptions-item>
             </n-descriptions>
             <n-space justify="end" class="section-actions">
               <n-button :loading="loadingBuiltin" @click="refreshBuiltinStatus()">刷新状态</n-button>
-              <n-button @click="openBuiltinAdmin">打开管理端</n-button>
+              <n-button v-if="builtinAdminPassword" secondary @click="copyBuiltinAdminPassword">复制管理密码</n-button>
+              <n-button type="primary" ghost @click="openBuiltinAdmin">打开管理端</n-button>
               <n-button type="primary" :loading="loadingBuiltin" @click="useBuiltinOpenList">启动并连接</n-button>
             </n-space>
           </div>
@@ -152,6 +172,7 @@
       </n-descriptions>
       <n-space justify="end" class="section-actions">
         <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新云下载状态</n-button>
+        <n-button :loading="startingAria2" @click="startAria2Rpc">启动 Aria2 RPC</n-button>
         <n-button @click="openBuiltinAdmin">打开 OpenList 管理端</n-button>
       </n-space>
     </section>
@@ -165,9 +186,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { authApi } from '@/api/auth'
 import { fsApi } from '@/api/fs'
+import { useClipboardAction } from '@/hooks/useClipboard'
 import {
   getBuiltinOpenListStatus,
   getLocalAria2Status,
+  startLocalAria2,
   startBuiltinOpenList,
   type BuiltinOpenListStatus,
   type LocalAria2Status
@@ -183,6 +206,7 @@ const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
+const { copyText } = useClipboardAction()
 const usernameInput = ref(settingsStore.username)
 const passwordInput = ref('')
 const tokenInput = ref('')
@@ -195,6 +219,7 @@ const connectionStatus = ref<{ type: StatusType; text: string } | null>(null)
 const aria2Status = ref<LocalAria2Status | null>(null)
 const offlineTools = ref<string[]>([])
 const loadingCloudTools = ref(false)
+const startingAria2 = ref(false)
 
 async function switchInstance(id: string) {
   await settingsStore.switchInstance(id)
@@ -204,6 +229,7 @@ async function switchInstance(id: string) {
   passwordInput.value = ''
   tokenInput.value = ''
   await storageStore.loadFromOpenList()
+  settingsStore.markInstanceStatus(id, storageStore.loadError ? 'offline' : 'online')
 }
 
 function addInstance() {
@@ -220,9 +246,10 @@ function addInstance() {
 function confirmRemoveInstance(id: string) {
   const instance = settingsStore.instances.find((item) => item.id === id)
   if (!instance) return
+  const defaultHint = instance.id === settingsStore.defaultInstanceId ? '这是当前默认 OpenList，删除后会自动把第一个实例设为默认。' : ''
   dialog.warning({
     title: '删除 OpenList',
-    content: `确认删除“${instance.name}”？保存的访问凭据也会一起删除。`,
+    content: `确认删除“${instance.name}”？保存的访问凭据也会一起删除。${defaultHint}`,
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async () => {
@@ -265,6 +292,22 @@ const openListAria2Text = computed(() => {
   return '未检测到云下载工具'
 })
 
+function instanceStatusLabel(status?: string) {
+  if (status === 'online') return '在线'
+  if (status === 'offline') return '离线'
+  return '未知'
+}
+
+function formatInstanceTime(value: number) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+
+function setDefaultInstance(id: string) {
+  if (settingsStore.setDefaultInstance(id)) {
+    message.success('默认 OpenList 已更新')
+  }
+}
+
 function serverBaseUrl() {
   return settingsStore.serverUrl.trim().replace(/\/+$/, '')
 }
@@ -303,10 +346,12 @@ async function probeOpenListServer() {
 async function loadStoragesAndGo(messageText: string) {
   await storageStore.loadFromOpenList()
   if (storageStore.loadError) {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
     connectionStatus.value = { type: 'warning', text: storageStore.loadError }
     return
   }
 
+  settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'online')
   connectionStatus.value = { type: 'success', text: messageText }
   message.success(messageText)
   await router.push({ name: 'files' })
@@ -368,6 +413,18 @@ async function refreshCloudDownloadStatus(showFeedback = true) {
   }
 }
 
+async function startAria2Rpc() {
+  startingAria2.value = true
+  try {
+    aria2Status.value = await startLocalAria2()
+    message.success(aria2Status.value.message)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'Aria2 启动失败')
+  } finally {
+    startingAria2.value = false
+  }
+}
+
 async function useBuiltinOpenList() {
   loadingBuiltin.value = true
   connectionStatus.value = null
@@ -386,6 +443,7 @@ async function useBuiltinOpenList() {
     await loadStoragesAndGo('内置 OpenList 已启动并连接成功。')
     await refreshBuiltinStatus(false)
   } catch (error) {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
     connectionStatus.value = {
       type: 'error',
       text: error instanceof Error ? error.message : String(error)
@@ -398,6 +456,14 @@ async function useBuiltinOpenList() {
 function openBuiltinAdmin() {
   const url = builtinStatus.value?.server_url || settingsStore.serverUrl || 'http://127.0.0.1:5244'
   window.open(url, '_blank')
+}
+
+async function copyBuiltinAdminPassword() {
+  if (!builtinAdminPassword.value) {
+    message.warning('请先启动并连接内置 OpenList')
+    return
+  }
+  await copyText(builtinAdminPassword.value, '管理密码已复制')
 }
 
 async function loginAndTest() {
@@ -432,6 +498,7 @@ async function loginAndTest() {
     passwordInput.value = ''
     await loadStoragesAndGo(`${probeText} 已登录并连接成功。`)
   } catch (error) {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
     connectionStatus.value = {
       type: 'error',
       text: error instanceof Error ? error.message : String(error)
@@ -461,6 +528,7 @@ async function testConnection() {
     await fsApi.list({ path: '/', page: 1, per_page: 1, refresh: false })
     await loadStoragesAndGo(`${probeText} 当前凭据可用，已连接。`)
   } catch (error) {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
     const text = error instanceof Error ? error.message : '连接失败'
     connectionStatus.value = {
       type: text.includes('storage not found') ? 'warning' : 'error',

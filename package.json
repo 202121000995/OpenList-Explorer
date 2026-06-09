@@ -1,6 +1,6 @@
 {
   "name": "openlist-explorer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "e2e:openlist": "py scripts/e2e_openlist_smoke.py"
   },
   "dependencies": {
     "@lucide/vue": "^1.17.0",

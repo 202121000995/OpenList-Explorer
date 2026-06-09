@@ -91,6 +91,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useStorageStore } from '@/stores/storage'
 import { useTasksStore } from '@/stores/tasks'
+import { syncOfflineDownloadTasks } from '@/services/offlineTasks'
 import type { TransferStatus } from '@/models/task'
 
 const route = useRoute()
@@ -103,6 +104,7 @@ const favoritesStore = useFavoritesStore()
 const historyStore = useHistoryStore()
 const showOnboarding = ref(false)
 let unlistenTransfer: UnlistenFn | null = null
+let offlineTaskTimer: number | null = null
 
 interface TransferProgressPayload {
   id: string
@@ -140,6 +142,14 @@ async function chooseOnboarding(mode: 'builtin' | 'existing') {
   await router.push({ name: 'openlist', query: { mode } })
 }
 
+function startOfflineTaskSync() {
+  if (offlineTaskTimer !== null) return
+  syncOfflineDownloadTasks()
+  offlineTaskTimer = window.setInterval(() => {
+    if (settingsStore.hasToken) syncOfflineDownloadTasks()
+  }, 10000)
+}
+
 onMounted(async () => {
   await Promise.all([
     settingsStore.hydrateFromDatabase(),
@@ -165,6 +175,8 @@ onMounted(async () => {
   if (!hasToken) return
 
   await storageStore.loadFromOpenList()
+  settingsStore.markInstanceStatus(settingsStore.activeInstanceId, storageStore.loadError ? 'offline' : 'online')
+  startOfflineTaskSync()
   if (route.name === 'files' && storageStore.activeStorage) {
     filesStore.resetToActiveStorage()
     await filesStore.load(storageStore.activeStorage.mountPath)
@@ -173,5 +185,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unlistenTransfer?.()
+  if (offlineTaskTimer !== null) window.clearInterval(offlineTaskTimer)
 })
 </script>

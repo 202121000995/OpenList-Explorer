@@ -6,6 +6,7 @@ import { tokenVault } from '@/services/tokenVault'
 
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type LanguageMode = 'zh-CN' | 'en-US'
+export type OpenListInstanceStatus = 'unknown' | 'online' | 'offline'
 
 export interface OpenListInstance {
   id: string
@@ -14,11 +15,14 @@ export interface OpenListInstance {
   username: string
   publicBaseUrl: string
   isBuiltin: boolean
+  lastConnectedAt?: number
+  lastStatus?: OpenListInstanceStatus
 }
 
 interface SettingsSnapshot {
   instances: OpenListInstance[]
   activeInstanceId: string
+  defaultInstanceId: string
   theme: ThemeMode
   language: LanguageMode
   downloadDir: string
@@ -37,6 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const legacyPublicBaseUrl = useStorage('openlist.publicBaseUrl', '')
   const instances = useStorage<OpenListInstance[]>('openlist.instances', [])
   const activeInstanceId = useStorage('openlist.activeInstanceId', '')
+  const defaultInstanceId = useStorage('openlist.defaultInstanceId', '')
   const theme = useStorage<ThemeMode>('openlist.theme', 'auto')
   const language = useStorage<LanguageMode>('openlist.language', 'zh-CN')
   const downloadDir = useStorage('openlist.downloadDir', '')
@@ -76,14 +81,25 @@ export const useSettingsStore = defineStore('settings', () => {
         serverUrl: legacyServerUrl.value || 'http://127.0.0.1:5244',
         username: legacyUsername.value,
         publicBaseUrl: legacyPublicBaseUrl.value,
-        isBuiltin
+        isBuiltin,
+        lastStatus: 'unknown'
       }
       instances.value = [instance]
       activeInstanceId.value = instance.id
+      defaultInstanceId.value = instance.id
+    }
+
+    instances.value = instances.value.map((instance) => ({
+      ...instance,
+      lastStatus: instance.lastStatus ?? 'unknown'
+    }))
+
+    if (!defaultInstanceId.value || !instances.value.some((instance) => instance.id === defaultInstanceId.value)) {
+      defaultInstanceId.value = instances.value[0]?.id ?? ''
     }
 
     if (!activeInstanceId.value || !instances.value.some((instance) => instance.id === activeInstanceId.value)) {
-      activeInstanceId.value = instances.value[0]?.id ?? ''
+      activeInstanceId.value = defaultInstanceId.value || instances.value[0]?.id || ''
     }
   }
 
@@ -104,7 +120,9 @@ export const useSettingsStore = defineStore('settings', () => {
       serverUrl: partial.serverUrl || 'http://127.0.0.1:5244',
       username: partial.username || '',
       publicBaseUrl: partial.publicBaseUrl || '',
-      isBuiltin: Boolean(partial.isBuiltin)
+      isBuiltin: Boolean(partial.isBuiltin),
+      lastConnectedAt: partial.lastConnectedAt,
+      lastStatus: partial.lastStatus || 'unknown'
     }
     instances.value = [...instances.value, instance]
     activeInstanceId.value = instance.id
@@ -117,8 +135,11 @@ export const useSettingsStore = defineStore('settings', () => {
     if (instances.value.length <= 1) return false
     await tokenVault.clearToken(id)
     instances.value = instances.value.filter((instance) => instance.id !== id)
+    if (defaultInstanceId.value === id) {
+      defaultInstanceId.value = instances.value[0]?.id ?? ''
+    }
     if (activeInstanceId.value === id) {
-      activeInstanceId.value = instances.value[0]?.id ?? ''
+      activeInstanceId.value = defaultInstanceId.value || instances.value[0]?.id || ''
       await initializeToken()
     }
     return true
@@ -129,6 +150,19 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!instances.value.some((instance) => instance.id === id)) return false
     activeInstanceId.value = id
     return initializeToken()
+  }
+
+  function setDefaultInstance(id: string) {
+    ensureInstances()
+    if (!instances.value.some((instance) => instance.id === id)) return false
+    defaultInstanceId.value = id
+    return true
+  }
+
+  function markInstanceStatus(id: string, status: OpenListInstanceStatus) {
+    const patch: Partial<Omit<OpenListInstance, 'id'>> = { lastStatus: status }
+    if (status === 'online') patch.lastConnectedAt = Date.now()
+    updateInstance(id, patch)
   }
 
   async function updateToken(token: string) {
@@ -154,6 +188,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (saved) {
       if (saved.instances?.length) instances.value = saved.instances
       activeInstanceId.value = saved.activeInstanceId || activeInstanceId.value
+      defaultInstanceId.value = saved.defaultInstanceId || defaultInstanceId.value
       theme.value = saved.theme || theme.value
       language.value = saved.language || language.value
       downloadDir.value = saved.downloadDir || downloadDir.value
@@ -165,12 +200,13 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   watch(
-    [instances, activeInstanceId, theme, language, downloadDir, uploadThreads, downloadThreads],
+    [instances, activeInstanceId, defaultInstanceId, theme, language, downloadDir, uploadThreads, downloadThreads],
     () => {
       if (!hydrated) return
       dbSetJson<SettingsSnapshot>('settings', {
         instances: instances.value,
         activeInstanceId: activeInstanceId.value,
+        defaultInstanceId: defaultInstanceId.value,
         theme: theme.value,
         language: language.value,
         downloadDir: downloadDir.value,
@@ -187,6 +223,7 @@ export const useSettingsStore = defineStore('settings', () => {
     publicBaseUrl,
     instances,
     activeInstanceId,
+    defaultInstanceId,
     activeInstance,
     theme,
     language,
@@ -201,6 +238,8 @@ export const useSettingsStore = defineStore('settings', () => {
     updateInstance,
     removeInstance,
     switchInstance,
+    setDefaultInstance,
+    markInstanceStatus,
     updateToken,
     clearToken,
     initializeToken,

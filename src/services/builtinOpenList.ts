@@ -33,6 +33,10 @@ export async function getLocalAria2Status() {
   return invoke<LocalAria2Status>('local_aria2_status')
 }
 
+export async function startLocalAria2() {
+  return invoke<LocalAria2Status>('start_local_aria2')
+}
+
 export async function startBuiltinOpenList() {
   return invoke<BuiltinOpenListSession>('start_builtin_openlist')
 }

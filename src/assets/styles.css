@@ -867,10 +867,10 @@ button {
 
 .instance-manager-row {
   display: grid;
-  grid-template-columns: 120px minmax(210px, 1fr) 120px minmax(180px, 1fr) 64px 64px;
+  grid-template-columns: 120px minmax(210px, 1fr) 120px minmax(180px, 1fr) 58px 72px 64px 64px;
   gap: 8px;
   align-items: center;
-  min-width: 820px;
+  min-width: 1040px;
 }
 
 .instance-name-input,
@@ -899,6 +899,45 @@ button {
   margin-top: 3px;
   color: var(--app-muted);
   font-size: 12px;
+}
+
+.instance-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.instance-status.online {
+  border-color: rgba(24, 160, 88, 0.35);
+  color: #18a058;
+  background: rgba(24, 160, 88, 0.08);
+}
+
+.instance-status.offline {
+  border-color: rgba(208, 48, 80, 0.35);
+  color: #d03050;
+  background: rgba(208, 48, 80, 0.08);
+}
+
+.secret-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.secret-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .builtin-panel {

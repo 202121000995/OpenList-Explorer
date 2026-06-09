@@ -254,6 +254,7 @@ import {
   type LocalUploadSelection
 } from '@/services/localFile'
 import { tokenVault } from '@/services/tokenVault'
+import { syncOfflineDownloadTasks } from '@/services/offlineTasks'
 import type { TransferTask } from '@/models/task'
 import { formatBytes, formatDate } from '@/utils/format'
 import { dirname, joinPath } from '@/utils/path'
@@ -737,6 +738,7 @@ async function submitCloudDownload() {
     message.success('云端下载已提交')
     cloudDownloadDialog.value = false
     historyStore.add('download', target)
+    await syncOfflineDownloadTasks()
   } catch (error) {
     tasksStore.updateTask(task.id, { status: 'failed' })
     message.error(error instanceof Error ? error.message : '云端下载提交失败')

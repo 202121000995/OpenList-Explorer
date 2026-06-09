@@ -1,5 +1,6 @@
 export type TransferType = 'upload' | 'download'
 export type TransferStatus = 'waiting' | 'running' | 'success' | 'failed' | 'paused' | 'canceled'
+export type TransferSource = 'local' | 'openlist-offline'
 
 export interface TransferTask {
   id: string
@@ -9,8 +10,12 @@ export interface TransferTask {
   speed: number
   path: string
   localPath?: string
+  remoteId?: string
+  source?: TransferSource
+  message?: string
   name: string
   createdAt: number
+  updatedAt?: number
 }
 
 export const taskStatusLabel: Record<TransferStatus, string> = {
