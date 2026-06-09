@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980">
+  <defs>
+    <style>
+      .bg { fill: #0e141e; }
+      .panel { fill: #141c29; stroke: #2b3950; stroke-width: 2; }
+      .panel2 { fill: #101824; stroke: #2b3950; stroke-width: 2; }
+      .active { fill: #1e3a5f; stroke: #3b8cff; stroke-width: 2; }
+      .button { fill: #172337; stroke: #334057; stroke-width: 2; }
+      .buttonPrimary { fill: #2f7df6; }
+      .muted { fill: #9aa8bb; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; }
+      .text { fill: #e7edf7; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; font-weight: 700; }
+      .small { font-size: 20px; font-weight: 500; }
+      .body { font-size: 24px; }
+      .title { font-size: 34px; }
+      .label { font-size: 28px; }
+      .tiny { font-size: 16px; font-weight: 500; }
+      .green { fill: #22c55e; }
+      .blue { fill: #3b8cff; }
+      .yellow { fill: #f7b731; }
+      .danger { fill: #f36b6b; }
+    </style>
+  </defs>
+  <rect width="1500" height="980" class="bg"/>
+
+  <text x="48" y="58" class="text title">多 OpenList 切换器方案对比</text>
+  <text x="48" y="92" class="muted small">每个实例保存：名称 / 地址 / 用户名 / token / 公网地址 / 是否内置。切换后刷新左侧存储点与文件列表。</text>
+
+  <!-- Option A -->
+  <g transform="translate(40 130)">
+    <rect width="450" height="780" rx="18" class="panel"/>
+    <text x="24" y="46" class="text label">方案 A：左上紧凑下拉</text>
+    <text x="24" y="78" class="muted small">适合 MVP，入口轻，不占空间</text>
+
+    <rect x="24" y="110" width="402" height="620" rx="12" class="panel2"/>
+    <text x="52" y="155" class="text body">☁ OpenList Explorer</text>
+    <rect x="52" y="182" width="330" height="58" rx="10" class="button"/>
+    <circle cx="78" cy="211" r="8" class="green"/>
+    <text x="96" y="220" class="text small">本机 OpenList</text>
+    <text x="315" y="220" class="muted small">⌄</text>
+
+    <rect x="52" y="250" width="330" height="210" rx="12" class="panel"/>
+    <rect x="68" y="268" width="298" height="50" rx="9" class="active"/>
+    <circle cx="92" cy="293" r="8" class="green"/>
+    <text x="112" y="301" class="text small">本机 OpenList</text>
+    <text x="112" y="322" class="muted tiny">http://127.0.0.1:5244</text>
+    <rect x="68" y="328" width="298" height="50" rx="9" class="button"/>
+    <circle cx="92" cy="353" r="8" class="blue"/>
+    <text x="112" y="361" class="text small">服务器 A</text>
+    <text x="112" y="382" class="muted tiny">https://pan.a.com</text>
+    <rect x="68" y="388" width="298" height="50" rx="9" class="button"/>
+    <text x="92" y="420" class="text small">＋ 添加 OpenList</text>
+
+    <text x="52" y="520" class="muted small">左侧存储空间</text>
+    <rect x="52" y="545" width="330" height="82" rx="12" class="active"/>
+    <rect x="76" y="566" width="42" height="42" rx="9" class="blue"/>
+    <text x="134" y="585" class="text small">root</text>
+    <text x="134" y="612" class="muted small">OpenList</text>
+
+    <text x="24" y="760" class="muted small">优点：实现快、干扰小、符合桌面软件习惯。</text>
+  </g>
+
+  <!-- Option B -->
+  <g transform="translate(525 130)">
+    <rect width="450" height="780" rx="18" class="panel"/>
+    <text x="24" y="46" class="text label">方案 B：左侧固定实例栏</text>
+    <text x="24" y="78" class="muted small">适合重度多账号，多实例一眼可见</text>
+
+    <rect x="24" y="110" width="402" height="620" rx="12" class="panel2"/>
+    <rect x="24" y="110" width="86" height="620" rx="12" class="panel"/>
+    <circle cx="67" cy="156" r="24" class="active"/>
+    <text x="58" y="166" class="text small">本</text>
+    <circle cx="67" cy="226" r="24" class="button"/>
+    <text x="58" y="236" class="text small">A</text>
+    <circle cx="67" cy="296" r="24" class="button"/>
+    <text x="58" y="306" class="text small">B</text>
+    <circle cx="67" cy="370" r="24" class="button"/>
+    <text x="58" y="379" class="text small">＋</text>
+
+    <text x="136" y="157" class="text body">本机 OpenList</text>
+    <text x="136" y="188" class="muted small">已连接 · 1 个挂载点</text>
+    <rect x="136" y="225" width="250" height="50" rx="9" class="button"/>
+    <text x="160" y="257" class="text small">刷新 OpenList</text>
+    <rect x="136" y="310" width="250" height="82" rx="12" class="active"/>
+    <rect x="160" y="331" width="42" height="42" rx="9" class="blue"/>
+    <text x="218" y="350" class="text small">root</text>
+    <text x="218" y="377" class="muted small">OpenList</text>
+
+    <text x="136" y="455" class="muted small">文件区</text>
+    <rect x="136" y="482" width="250" height="42" rx="8" class="button"/>
+    <rect x="136" y="538" width="250" height="132" rx="8" class="panel"/>
+
+    <text x="24" y="760" class="muted small">优点：账号多时最快；缺点：左侧空间更紧。</text>
+  </g>
+
+  <!-- Option C -->
+  <g transform="translate(1010 130)">
+    <rect width="450" height="780" rx="18" class="panel"/>
+    <text x="24" y="46" class="text label">方案 C：实例管理页优先</text>
+    <text x="24" y="78" class="muted small">适合企业/团队，配置清晰</text>
+
+    <rect x="24" y="110" width="402" height="620" rx="12" class="panel2"/>
+    <text x="52" y="155" class="text body">OpenList 实例</text>
+    <rect x="52" y="180" width="330" height="58" rx="10" class="buttonPrimary"/>
+    <text x="92" y="217" class="text small">＋ 添加 OpenList 实例</text>
+
+    <rect x="52" y="260" width="330" height="92" rx="12" class="active"/>
+    <circle cx="82" cy="292" r="8" class="green"/>
+    <text x="104" y="300" class="text small">本机 OpenList</text>
+    <text x="104" y="327" class="muted small">内置 · admin · 127.0.0.1</text>
+    <text x="332" y="313" class="muted small">编辑</text>
+
+    <rect x="52" y="370" width="330" height="92" rx="12" class="button"/>
+    <circle cx="82" cy="402" r="8" class="yellow"/>
+    <text x="104" y="410" class="text small">远程服务器 A</text>
+    <text x="104" y="437" class="muted small">https://pan.a.com · 公网直链</text>
+    <text x="332" y="423" class="muted small">切换</text>
+
+    <rect x="52" y="500" width="330" height="52" rx="9" class="button"/>
+    <text x="80" y="534" class="text small">导入 / 导出实例配置</text>
+    <rect x="52" y="568" width="330" height="52" rx="9" class="button"/>
+    <text x="80" y="602" class="text small">打开当前 OpenList Web</text>
+
+    <text x="24" y="760" class="muted small">优点：配置完整；缺点：日常切换多一步。</text>
+  </g>
+</svg>

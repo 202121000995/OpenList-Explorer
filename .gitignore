@@ -1,0 +1,12 @@
+node_modules/
+dist/
+login_gate_rewrite/
+src-tauri/target/
+src-tauri/binaries/*.exe
+src-tauri/target/
+*.msi
+*.exe
+*.log
+.env
+.DS_Store
+Thumbs.db
