@@ -250,9 +250,20 @@
       <n-modal v-model:show="cloudDownloadDialog">
         <n-card class="modal-card" title="云端下载" role="dialog" aria-modal="true">
           <n-space vertical>
-            <n-alert type="info">
-              当前 OpenList 可用云下载工具：{{ cloudTools.length ? cloudTools.join(', ') : '未检测到' }}。未显示 Aria2 表示当前 OpenList 未启用 Aria2。
+            <n-alert :type="cloudAria2Enabled ? 'success' : 'warning'">
+              {{ cloudDownloadHint }}
             </n-alert>
+            <div v-if="!cloudAria2Enabled" class="cloud-aria2-guide">
+              <div>Aria2 启用入口在 OpenList 管理端，不在这个下载弹窗里。</div>
+              <div class="cloud-aria2-config">
+                <span>RPC 地址：{{ aria2RpcUrl }}</span>
+                <span>RPC 密钥：{{ settingsStore.aria2RpcSecret || '未设置' }}</span>
+              </div>
+              <n-space size="small">
+                <n-button size="small" secondary @click="copyAria2ConfigForOpenList">复制 Aria2 配置</n-button>
+                <n-button size="small" type="primary" ghost @click="openOpenListAdminForAria2">打开 OpenList 管理端</n-button>
+              </n-space>
+            </div>
             <n-input v-model:value="cloudUrls" type="textarea" placeholder="每行一个下载地址" :autosize="{ minRows: 4, maxRows: 8 }" />
             <n-select v-model:value="cloudTool" :options="cloudToolOptions" placeholder="下载工具" />
             <n-input v-model:value="cloudTargetPath" placeholder="保存目录" />
@@ -357,6 +368,7 @@ import {
 } from '@lucide/vue'
 import StorageSidebar from '@/components/StorageSidebar.vue'
 import { fsApi } from '@/api/fs'
+import { openExternalUrl } from '@/services/builtinOpenList'
 import type { ExplorerFileItem } from '@/models/file'
 import { useClipboardAction } from '@/hooks/useClipboard'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -529,6 +541,13 @@ const cloudToolOptions = computed<Array<{ label: string; value: string; disabled
     options.push({ label: 'Aria2（OpenList 未启用）', value: 'Aria2', disabled: true })
   }
   return options
+})
+const cloudAria2Enabled = computed(() => cloudTools.value.some((tool) => /aria2/i.test(tool)))
+const aria2RpcUrl = computed(() => `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`)
+const cloudDownloadHint = computed(() => {
+  const tools = cloudTools.value.length ? cloudTools.value.join('、') : '未检测到'
+  if (cloudAria2Enabled.value) return `当前 OpenList 已启用 Aria2。可用云下载工具：${tools}。`
+  return `当前 OpenList 可用云下载工具：${tools}。未显示 Aria2 表示需要先到 OpenList 管理端启用 Aria2。`
 })
 
 const viewOptions = computed<DropdownOption[]>(() => [
@@ -844,6 +863,25 @@ async function copyRawUrl(file: ExplorerFileItem) {
 
   const rawUrl = await filesStore.getRawUrl(file)
   if (rawUrl) await copyText(rawUrl, '直链已复制')
+}
+
+async function copyAria2ConfigForOpenList() {
+  const lines = [
+    `RPC 地址：${aria2RpcUrl.value}`,
+    `RPC 端口：${settingsStore.aria2RpcPort}`,
+    `RPC 密钥：${settingsStore.aria2RpcSecret || '未设置'}`,
+    `下载目录：${settingsStore.downloadDir || '系统下载目录'}`
+  ]
+  await copyText(lines.join('\n'), 'Aria2 配置已复制')
+}
+
+async function openOpenListAdminForAria2() {
+  try {
+    await openExternalUrl(settingsStore.serverUrl)
+    message.info('在 OpenList 管理端进入离线下载工具设置，新增或启用 Aria2，并填入刚复制的 RPC 配置。')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '管理端打开失败')
+  }
 }
 
 function openMkdir() {

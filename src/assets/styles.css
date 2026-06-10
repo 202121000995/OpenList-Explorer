@@ -1035,6 +1035,24 @@ button {
   white-space: nowrap;
 }
 
+.cloud-aria2-guide {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-muted);
+  background: var(--app-subtle);
+  font-size: 13px;
+}
+
+.cloud-aria2-config {
+  display: grid;
+  gap: 4px;
+  color: var(--app-text);
+  font-size: 12px;
+}
+
 .modal-help {
   color: var(--app-muted);
   font-size: 13px;

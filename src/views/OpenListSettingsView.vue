@@ -203,7 +203,7 @@
         <div class="aria2-panel">
           <div class="aria2-panel-title">OpenList 云下载工具</div>
           <n-alert :type="openListAria2Enabled ? 'success' : 'warning'" class="settings-alert">
-            OpenList 需要在管理端启用 Aria2 后，云下载任务才会交给 Aria2 执行。
+            {{ openListAria2Hint }}
           </n-alert>
           <n-descriptions :column="1" size="small" bordered>
             <n-descriptions-item label="云下载工具">
@@ -340,6 +340,10 @@ const openListAria2Text = computed(() => {
   return '未检测到云下载工具'
 })
 const openListAria2Enabled = computed(() => offlineTools.value.some((tool) => /aria2/i.test(tool)))
+const openListAria2Hint = computed(() => {
+  if (openListAria2Enabled.value) return 'OpenList 已启用 Aria2，云下载任务可以选择 Aria2。'
+  return 'Aria2 的启用入口在 OpenList 管理端的离线下载工具设置里；Explorer 这里只负责启动本机 Aria2 RPC 并提供配置。'
+})
 const aria2ConnectionText = computed(() => {
   if (aria2Status.value?.running) return '本机已连接'
   if (aria2Status.value?.available) return '未连接'
