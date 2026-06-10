@@ -4,57 +4,63 @@
       <div class="panel-heading">OpenList 实例管理</div>
       <div class="instance-manager">
         <div v-for="instance in settingsStore.instances" :key="instance.id" class="instance-manager-row">
-          <n-input
-            class="instance-name-input"
-            :value="instance.name"
-            placeholder="名称"
-            @update:value="settingsStore.updateInstance(instance.id, { name: $event })"
-          />
-          <n-input
-            :value="instance.serverUrl"
-            placeholder="http://127.0.0.1:5244"
-            @update:value="settingsStore.updateInstance(instance.id, { serverUrl: $event })"
-          />
-          <n-input
-            class="instance-user-input"
-            :value="instance.username"
-            placeholder="用户名"
-            @update:value="settingsStore.updateInstance(instance.id, { username: $event })"
-          />
-          <n-input
-            :value="instance.publicBaseUrl"
-            placeholder="公网地址"
-            @update:value="settingsStore.updateInstance(instance.id, { publicBaseUrl: $event })"
-          />
-          <span
-            class="instance-status"
-            :class="instance.lastStatus || 'unknown'"
-            :title="instance.lastConnectedAt ? `最后连接：${formatInstanceTime(instance.lastConnectedAt)}` : '尚未成功连接'"
-          >
-            {{ instanceStatusLabel(instance.lastStatus) }}
-          </span>
-          <n-button
-            secondary
-            :type="instance.id === settingsStore.defaultInstanceId ? 'primary' : 'default'"
-            @click="setDefaultInstance(instance.id)"
-          >
-            {{ instance.id === settingsStore.defaultInstanceId ? '默认' : '设默认' }}
-          </n-button>
-          <n-button
-            secondary
-            :type="instance.id === settingsStore.activeInstanceId ? 'primary' : 'default'"
-            @click="switchInstance(instance.id)"
-          >
-            {{ instance.id === settingsStore.activeInstanceId ? '当前' : '切换' }}
-          </n-button>
-          <n-button
-            secondary
-            type="error"
-            :disabled="settingsStore.instances.length <= 1"
-            @click="confirmRemoveInstance(instance.id)"
-          >
-            删除
-          </n-button>
+          <div class="instance-fields">
+            <n-input
+              class="instance-name-input"
+              :value="instance.name"
+              placeholder="名称"
+              @update:value="settingsStore.updateInstance(instance.id, { name: $event })"
+            />
+            <n-input
+              class="instance-server-input"
+              :value="instance.serverUrl"
+              placeholder="http://127.0.0.1:5244"
+              @update:value="settingsStore.updateInstance(instance.id, { serverUrl: $event })"
+            />
+            <n-input
+              class="instance-user-input"
+              :value="instance.username"
+              placeholder="用户名"
+              @update:value="settingsStore.updateInstance(instance.id, { username: $event })"
+            />
+            <n-input
+              class="instance-public-input"
+              :value="instance.publicBaseUrl"
+              placeholder="公网地址"
+              @update:value="settingsStore.updateInstance(instance.id, { publicBaseUrl: $event })"
+            />
+          </div>
+          <div class="instance-actions">
+            <span
+              class="instance-status"
+              :class="instance.lastStatus || 'unknown'"
+              :title="instance.lastConnectedAt ? `最后连接：${formatInstanceTime(instance.lastConnectedAt)}` : '尚未成功连接'"
+            >
+              {{ instanceStatusLabel(instance.lastStatus) }}
+            </span>
+            <n-button
+              secondary
+              :type="instance.id === settingsStore.defaultInstanceId ? 'primary' : 'default'"
+              @click="setDefaultInstance(instance.id)"
+            >
+              {{ instance.id === settingsStore.defaultInstanceId ? '默认' : '设默认' }}
+            </n-button>
+            <n-button
+              secondary
+              :type="instance.id === settingsStore.activeInstanceId ? 'primary' : 'default'"
+              @click="switchInstance(instance.id)"
+            >
+              {{ instance.id === settingsStore.activeInstanceId ? '当前' : '切换' }}
+            </n-button>
+            <n-button
+              secondary
+              type="error"
+              :disabled="settingsStore.instances.length <= 1"
+              @click="confirmRemoveInstance(instance.id)"
+            >
+              删除
+            </n-button>
+          </div>
         </div>
       </div>
       <n-space justify="end" class="section-actions">
@@ -101,7 +107,7 @@
         </n-tab-pane>
 
         <n-tab-pane name="existing" tab="连接已有 OpenList">
-          <n-form label-placement="left" label-width="120">
+          <n-form label-placement="left" label-width="120" class="openlist-form">
             <n-form-item label="服务器地址">
               <n-input v-model:value="settingsStore.serverUrl" placeholder="http://127.0.0.1:5244" />
             </n-form-item>
@@ -154,14 +160,14 @@
       <n-alert type="info" class="settings-alert">
         云下载能力由 OpenList 提供。Explorer 会读取 OpenList 已启用的下载工具；如果 OpenList 没有启用 Aria2，这里会明确显示。
       </n-alert>
-      <n-form label-placement="left" label-width="120" class="aria2-config-form">
+      <n-form label-placement="left" label-width="120" class="openlist-form aria2-config-form">
         <n-form-item label="自动启动">
           <n-switch v-model:value="settingsStore.aria2AutoStart" />
         </n-form-item>
         <n-form-item label="RPC 端口">
           <n-input-number v-model:value="settingsStore.aria2RpcPort" :min="1024" :max="65535" />
         </n-form-item>
-        <n-form-item label="RPC 密钥">
+        <n-form-item label="RPC 密钥" class="aria2-wide-field">
           <n-input
             v-model:value="settingsStore.aria2RpcSecret"
             type="password"
@@ -169,7 +175,7 @@
             placeholder="留空则不设置 RPC 密钥"
           />
         </n-form-item>
-        <n-form-item label="下载目录">
+        <n-form-item label="下载目录" class="aria2-wide-field">
           <n-input v-model:value="settingsStore.aria2DownloadDir" placeholder="留空则使用系统下载目录" />
         </n-form-item>
         <n-form-item label="并发任务">
