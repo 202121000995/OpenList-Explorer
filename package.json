@@ -1,6 +1,6 @@
 {
   "name": "openlist-explorer",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "typecheck": "vue-tsc --noEmit",
+    "check:layout": "scripts\\check_responsive_layout.cmd",
     "e2e:openlist": "py scripts/e2e_openlist_smoke.py"
   },
   "dependencies": {

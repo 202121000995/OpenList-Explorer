@@ -42,6 +42,26 @@ interface SettingsSnapshot {
   aria2Split: number
 }
 
+const settingKeys = [
+  'instances',
+  'activeInstanceId',
+  'defaultInstanceId',
+  'theme',
+  'language',
+  'fileViewMode',
+  'fileSortKey',
+  'fileSortOrder',
+  'downloadDir',
+  'uploadThreads',
+  'downloadThreads',
+  'aria2RpcPort',
+  'aria2RpcSecret',
+  'aria2DownloadDir',
+  'aria2AutoStart',
+  'aria2MaxConcurrent',
+  'aria2Split'
+] as const satisfies readonly (keyof SettingsSnapshot)[]
+
 function createId() {
   return crypto.randomUUID?.() ?? `instance-${Date.now()}`
 }
@@ -205,28 +225,66 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function hydrateFromDatabase() {
-    const saved = await dbGetJson<SettingsSnapshot>('settings')
-    if (saved) {
-      if (saved.instances?.length) instances.value = saved.instances
-      activeInstanceId.value = saved.activeInstanceId || activeInstanceId.value
-      defaultInstanceId.value = saved.defaultInstanceId || defaultInstanceId.value
-      theme.value = saved.theme || theme.value
-      language.value = saved.language || language.value
-      fileViewMode.value = saved.fileViewMode || fileViewMode.value
-      fileSortKey.value = saved.fileSortKey || fileSortKey.value
-      fileSortOrder.value = saved.fileSortOrder || fileSortOrder.value
-      downloadDir.value = saved.downloadDir || downloadDir.value
-      uploadThreads.value = saved.uploadThreads || uploadThreads.value
-      downloadThreads.value = saved.downloadThreads || downloadThreads.value
-      aria2RpcPort.value = saved.aria2RpcPort || aria2RpcPort.value
-      aria2RpcSecret.value = saved.aria2RpcSecret || aria2RpcSecret.value
-      aria2DownloadDir.value = saved.aria2DownloadDir || aria2DownloadDir.value
-      aria2AutoStart.value = saved.aria2AutoStart ?? aria2AutoStart.value
-      aria2MaxConcurrent.value = saved.aria2MaxConcurrent || aria2MaxConcurrent.value
-      aria2Split.value = saved.aria2Split || aria2Split.value
-      ensureInstances()
-    }
+    const legacySnapshot = await dbGetJson<Partial<SettingsSnapshot>>('settings')
+    if (legacySnapshot) applySettingsSnapshot(legacySnapshot)
+
+    const entries = await Promise.all(
+      settingKeys.map(async (key) => [key, await dbGetJson<SettingsSnapshot[typeof key]>(`settings.${key}`)] as const)
+    )
+    const granularSnapshot = Object.fromEntries(entries.filter(([, value]) => value !== null)) as Partial<SettingsSnapshot>
+    applySettingsSnapshot(granularSnapshot)
+    ensureInstances()
     hydrated = true
+  }
+
+  function applySettingsSnapshot(saved: Partial<SettingsSnapshot>) {
+    if (saved.instances?.length) instances.value = saved.instances
+    activeInstanceId.value = saved.activeInstanceId ?? activeInstanceId.value
+    defaultInstanceId.value = saved.defaultInstanceId ?? defaultInstanceId.value
+    theme.value = saved.theme ?? theme.value
+    language.value = saved.language ?? language.value
+    fileViewMode.value = saved.fileViewMode ?? fileViewMode.value
+    fileSortKey.value = saved.fileSortKey ?? fileSortKey.value
+    fileSortOrder.value = saved.fileSortOrder ?? fileSortOrder.value
+    downloadDir.value = saved.downloadDir ?? downloadDir.value
+    uploadThreads.value = saved.uploadThreads ?? uploadThreads.value
+    downloadThreads.value = saved.downloadThreads ?? downloadThreads.value
+    aria2RpcPort.value = saved.aria2RpcPort ?? aria2RpcPort.value
+    aria2RpcSecret.value = saved.aria2RpcSecret ?? aria2RpcSecret.value
+    aria2DownloadDir.value = saved.aria2DownloadDir ?? aria2DownloadDir.value
+    aria2AutoStart.value = saved.aria2AutoStart ?? aria2AutoStart.value
+    aria2MaxConcurrent.value = saved.aria2MaxConcurrent ?? aria2MaxConcurrent.value
+    aria2Split.value = saved.aria2Split ?? aria2Split.value
+  }
+
+  function settingsSnapshot(): SettingsSnapshot {
+    return {
+      instances: instances.value,
+      activeInstanceId: activeInstanceId.value,
+      defaultInstanceId: defaultInstanceId.value,
+      theme: theme.value,
+      language: language.value,
+      fileViewMode: fileViewMode.value,
+      fileSortKey: fileSortKey.value,
+      fileSortOrder: fileSortOrder.value,
+      downloadDir: downloadDir.value,
+      uploadThreads: uploadThreads.value,
+      downloadThreads: downloadThreads.value,
+      aria2RpcPort: aria2RpcPort.value,
+      aria2RpcSecret: aria2RpcSecret.value,
+      aria2DownloadDir: aria2DownloadDir.value,
+      aria2AutoStart: aria2AutoStart.value,
+      aria2MaxConcurrent: aria2MaxConcurrent.value,
+      aria2Split: aria2Split.value
+    }
+  }
+
+  function persistSettings() {
+    const snapshot = settingsSnapshot()
+    Promise.all([
+      dbSetJson('settings.schemaVersion', 2),
+      ...settingKeys.map((key) => dbSetJson(`settings.${key}`, snapshot[key]))
+    ])
   }
 
   watch(
@@ -251,25 +309,7 @@ export const useSettingsStore = defineStore('settings', () => {
     ],
     () => {
       if (!hydrated) return
-      dbSetJson<SettingsSnapshot>('settings', {
-        instances: instances.value,
-        activeInstanceId: activeInstanceId.value,
-        defaultInstanceId: defaultInstanceId.value,
-        theme: theme.value,
-        language: language.value,
-        fileViewMode: fileViewMode.value,
-        fileSortKey: fileSortKey.value,
-        fileSortOrder: fileSortOrder.value,
-        downloadDir: downloadDir.value,
-        uploadThreads: uploadThreads.value,
-        downloadThreads: downloadThreads.value,
-        aria2RpcPort: aria2RpcPort.value,
-        aria2RpcSecret: aria2RpcSecret.value,
-        aria2DownloadDir: aria2DownloadDir.value,
-        aria2AutoStart: aria2AutoStart.value,
-        aria2MaxConcurrent: aria2MaxConcurrent.value,
-        aria2Split: aria2Split.value
-      })
+      persistSettings()
     },
     { deep: true }
   )

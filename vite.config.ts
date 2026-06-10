@@ -14,5 +14,21 @@ export default defineConfig({
     port: 5173,
     strictPort: false
   },
+  build: {
+    chunkSizeWarningLimit: 1300,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('naive-ui') || id.includes('@css-render') || id.includes('vueuc')) return 'ui'
+          if (id.includes('@tauri-apps')) return 'tauri'
+          if (id.includes('qrcode')) return 'qrcode'
+          if (id.includes('axios')) return 'network'
+          if (id.includes('vue') || id.includes('pinia') || id.includes('@vueuse')) return 'vue'
+          return 'vendor'
+        }
+      }
+    }
+  },
   clearScreen: false
 })

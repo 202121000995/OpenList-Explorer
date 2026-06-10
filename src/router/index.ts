@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
-import FileManagerView from '@/views/FileManagerView.vue'
-import HomeView from '@/views/HomeView.vue'
-import OpenListSettingsView from '@/views/OpenListSettingsView.vue'
-import SettingsView from '@/views/SettingsView.vue'
-import TasksView from '@/views/TasksView.vue'
+
+const FileManagerView = () => import('@/views/FileManagerView.vue')
+const HomeView = () => import('@/views/HomeView.vue')
+const OpenListSettingsView = () => import('@/views/OpenListSettingsView.vue')
+const SettingsView = () => import('@/views/SettingsView.vue')
+const TasksView = () => import('@/views/TasksView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
