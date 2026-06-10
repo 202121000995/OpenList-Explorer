@@ -6,7 +6,7 @@
     :bordered="false"
     :single-line="false"
     :pagination="{ pageSize: 12 }"
-    :scroll-x="1040"
+    :scroll-x="1160"
   />
 </template>
 
@@ -14,7 +14,7 @@
 import { computed, h } from 'vue'
 import { NButton, NProgress, NSpace, NTag, type DataTableColumns } from 'naive-ui'
 import { FolderOpen, Pause, Play, Trash2, X } from '@lucide/vue'
-import { taskStatusLabel, type TransferTask } from '@/models/task'
+import { taskStageLabel, taskStatusLabel, type TransferTask } from '@/models/task'
 import { formatBytes } from '@/utils/format'
 
 const props = defineProps<{
@@ -53,6 +53,14 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
     render(row) {
       const type = row.status === 'success' ? 'success' : row.status === 'failed' ? 'error' : 'default'
       return h(NTag, { type, size: 'small' }, { default: () => taskStatusLabel[row.status] })
+    }
+  },
+  {
+    title: '阶段',
+    key: 'stage',
+    width: 116,
+    render(row) {
+      return row.stage ? taskStageLabel[row.stage] : '-'
     }
   },
   {

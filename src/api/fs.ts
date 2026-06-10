@@ -26,8 +26,14 @@ export interface OpenListTaskItem {
   speed?: number
   path?: string
   dst?: string
+  dir?: string
+  save_path?: string
+  phase?: string
+  stage?: string
   error?: string
   err?: string
+  message?: string
+  msg?: string
   [key: string]: unknown
 }
 

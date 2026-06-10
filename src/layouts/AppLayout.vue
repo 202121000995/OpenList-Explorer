@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { Cloud, Download, Files, Moon, Settings, Sun, Upload } from '@lucide/vue'
@@ -150,6 +150,18 @@ function startOfflineTaskSync() {
   }, 10000)
 }
 
+function stopOfflineTaskSync() {
+  if (offlineTaskTimer !== null) {
+    window.clearInterval(offlineTaskTimer)
+    offlineTaskTimer = null
+  }
+}
+
+function restartOfflineTaskSync() {
+  stopOfflineTaskSync()
+  if (settingsStore.hasToken) startOfflineTaskSync()
+}
+
 onMounted(async () => {
   await Promise.all([
     settingsStore.hydrateFromDatabase(),
@@ -183,8 +195,10 @@ onMounted(async () => {
   }
 })
 
+watch(() => [settingsStore.hasToken, settingsStore.activeInstanceId] as const, restartOfflineTaskSync)
+
 onBeforeUnmount(() => {
   unlistenTransfer?.()
-  if (offlineTaskTimer !== null) window.clearInterval(offlineTaskTimer)
+  stopOfflineTaskSync()
 })
 </script>

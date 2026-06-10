@@ -11,6 +11,7 @@ from urllib import parse, request
 BASE_URL = os.environ.get("OPENLIST_URL", "http://127.0.0.1:5244").rstrip("/")
 TOKEN = os.environ.get("OPENLIST_TOKEN", "").strip()
 PARENT = os.environ.get("OPENLIST_E2E_PARENT", "").strip()
+REQUIRE_CLOUD = os.environ.get("OPENLIST_E2E_REQUIRE_CLOUD", "").strip().lower() in {"1", "true", "yes"}
 
 
 def fail(message: str):
@@ -114,41 +115,155 @@ def cleanup(parent: str, run_id: str):
         pass
 
 
+def list_names(path: str):
+    listed = api("POST", "/api/fs/list", {"path": path, "page": 1, "per_page": 200, "refresh": True})
+    return [item.get("name") for item in (listed.get("content") or [])]
+
+
+def require_name(path: str, name: str):
+    names = list_names(path)
+    if name not in names:
+        fail(f"{name} was not found in {path}; names={names}")
+
+
+def require_missing(path: str, name: str):
+    names = list_names(path)
+    if name in names:
+        fail(f"{name} should not exist in {path}; names={names}")
+
+
+def offline_tools():
+    try:
+        value = api("GET", "/api/public/offline_download_tools")
+        return value if isinstance(value, list) else []
+    except Exception as error:
+        print(f"[WARN] could not query offline download tools: {error}")
+        return []
+
+
+def task_items(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict) and isinstance(value.get("tasks"), list):
+        return value["tasks"]
+    return []
+
+
+def task_id(task):
+    return str(task.get("id") or task.get("tid") or "")
+
+
+def task_state(task):
+    return str(task.get("status") or task.get("state") or task.get("phase") or "").lower()
+
+
+def run_cloud_download_smoke(root: str, raw_url: str):
+    if not raw_url:
+        print("[WARN] cloud download smoke skipped: raw_url is empty")
+        if REQUIRE_CLOUD:
+            fail("cloud download smoke requires a raw_url")
+        return
+
+    tools = offline_tools()
+    if not tools:
+        print("[WARN] cloud download smoke skipped: OpenList has no offline download tools enabled")
+        if REQUIRE_CLOUD:
+            fail("cloud download smoke requires an enabled OpenList offline download tool")
+        return
+
+    target = join_remote(root, "offline")
+    print(f"[cloud] submit with {tools[0]} -> {target}")
+    try:
+        api("POST", "/api/fs/mkdir", {"path": target})
+        api(
+            "POST",
+            "/api/fs/add_offline_download",
+            {
+                "path": target,
+                "urls": [raw_url],
+                "tool": tools[0],
+                "delete_policy": "delete_never",
+            },
+        )
+    except Exception as error:
+        print(f"[WARN] cloud download submit failed with {tools[0]}: {error}")
+        if REQUIRE_CLOUD:
+            fail(f"cloud download submit failed: {error}")
+        return
+
+    seen_task = ""
+    for _ in range(12):
+        undone = task_items(api("GET", "/api/admin/task/offline_download/undone"))
+        done = task_items(api("GET", "/api/admin/task/offline_download/done"))
+        candidates = undone + done
+        for item in candidates:
+            text = json.dumps(item, ensure_ascii=False)
+            if raw_url in text or target in text:
+                seen_task = task_id(item) or seen_task or "<unknown>"
+                state = task_state(item)
+                if item in done or "success" in state or "complete" in state or "完成" in state:
+                    print(f"[OK] cloud download task reached done list: {seen_task}")
+                    return
+        time.sleep(2)
+
+    if seen_task:
+        print(f"[WARN] cloud download task was submitted but did not finish during smoke window: {seen_task}")
+        return
+    print("[WARN] cloud download task was submitted but not found in OpenList task lists")
+    if REQUIRE_CLOUD:
+        fail("cloud download task did not appear in OpenList task lists")
+
+
 def run_smoke(parent: str):
     run_id = f"_openlist_explorer_e2e_{int(time.time())}"
     root = join_remote(parent, run_id)
+    copy_dir = join_remote(root, "copy-target")
+    move_dir = join_remote(root, "move-target")
     upload_path = join_remote(root, "sample.txt")
-    renamed_path = join_remote(root, "renamed.txt")
+    moved_path = join_remote(move_dir, "renamed.txt")
     sample = Path(os.environ.get("TEMP", ".")).joinpath(f"{run_id}.txt")
     sample.write_text("OpenList Explorer smoke test\n", encoding="utf-8")
 
     try:
-        print(f"[1/8] mkdir {root}")
+        print(f"[1/12] mkdir {root}")
         api("POST", "/api/fs/mkdir", {"path": root})
+        api("POST", "/api/fs/mkdir", {"path": copy_dir})
+        api("POST", "/api/fs/mkdir", {"path": move_dir})
 
-        print(f"[2/8] upload {upload_path}")
+        print(f"[2/12] upload {upload_path}")
         multipart_upload(sample, upload_path)
 
-        print(f"[3/8] list {root}")
-        listed = api("POST", "/api/fs/list", {"path": root, "page": 1, "per_page": 20, "refresh": True})
-        names = [item.get("name") for item in listed.get("content", [])]
-        if "sample.txt" not in names:
-            fail("uploaded file was not found in list response")
+        print(f"[3/12] list {root}")
+        require_name(root, "sample.txt")
 
-        print("[4/8] rename")
+        print("[4/12] rename")
         api("POST", "/api/fs/rename", {"path": upload_path, "name": "renamed.txt"})
+        require_name(root, "renamed.txt")
 
-        print("[5/8] search")
+        print("[5/12] copy")
+        api("POST", "/api/fs/copy", {"src_dir": root, "dst_dir": copy_dir, "names": ["renamed.txt"]})
+        require_name(copy_dir, "renamed.txt")
+
+        print("[6/12] move")
+        api("POST", "/api/fs/move", {"src_dir": root, "dst_dir": move_dir, "names": ["renamed.txt"]})
+        require_name(move_dir, "renamed.txt")
+        require_missing(root, "renamed.txt")
+
+        print("[7/12] delete copied file")
+        api("POST", "/api/fs/remove", {"dir": copy_dir, "names": ["renamed.txt"]})
+        require_missing(copy_dir, "renamed.txt")
+
+        print("[8/12] search")
         try:
             api("POST", "/api/fs/search", {"parent": root, "keywords": "renamed", "page": 1, "per_page": 20})
         except Exception as error:
             print(f"[WARN] search unavailable on this storage: {error}")
 
-        print("[6/8] get raw url")
-        detail = api("POST", "/api/fs/get", {"path": renamed_path})
+        print("[9/12] get raw url")
+        detail = api("POST", "/api/fs/get", {"path": moved_path})
         raw_url = detail.get("raw_url") if isinstance(detail, dict) else ""
 
-        print("[7/8] browser download probe")
+        print("[10/12] browser download probe")
         if raw_url:
             with request.urlopen(raw_url, timeout=30) as response:
                 if response.status >= 400:
@@ -156,8 +271,10 @@ def run_smoke(parent: str):
         else:
             print("[WARN] raw_url is empty; skipping direct download probe")
 
-        print("[8/8] delete")
-        api("POST", "/api/fs/remove", {"dir": root, "names": ["renamed.txt"]})
+        print("[11/12] cloud download status")
+        run_cloud_download_smoke(root, raw_url)
+
+        print("[12/12] delete")
         api("POST", "/api/fs/remove", {"dir": parent, "names": [run_id]})
         print(f"[OK] OpenList smoke test passed on parent: {parent}")
     finally:

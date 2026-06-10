@@ -2,17 +2,22 @@ import { computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { dbGetJson, dbGetTasks, dbReplaceTasks } from '@/services/database'
-import type { TransferSource, TransferStatus, TransferTask, TransferType } from '@/models/task'
+import type { TransferSource, TransferStage, TransferStatus, TransferTask, TransferType } from '@/models/task'
 
 interface UpsertRemoteTaskPayload {
   remoteId: string
   source: TransferSource
+  instanceId?: string
   type: TransferType
   name: string
   path: string
   status: TransferStatus
+  stage?: TransferStage
   progress: number
   speed?: number
+  rawStatus?: string
+  failureReason?: string
+  completedDir?: string
   message?: string
 }
 
@@ -34,6 +39,7 @@ export const useTasksStore = defineStore('tasks', () => {
       name,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      stage: 'local',
       source: 'local'
     }
     tasks.value.unshift(task)
@@ -42,7 +48,22 @@ export const useTasksStore = defineStore('tasks', () => {
 
   function updateTask(
     id: string,
-    patch: Partial<Pick<TransferTask, 'status' | 'progress' | 'speed' | 'localPath' | 'remoteUrl' | 'message'>>
+    patch: Partial<
+      Pick<
+        TransferTask,
+        | 'status'
+        | 'progress'
+        | 'speed'
+        | 'localPath'
+        | 'remoteUrl'
+        | 'instanceId'
+        | 'stage'
+        | 'rawStatus'
+        | 'failureReason'
+        | 'completedDir'
+        | 'message'
+      >
+    >
   ) {
     const task = tasks.value.find((item) => item.id === id)
     if (!task) return
@@ -50,14 +71,25 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   function upsertRemoteTask(payload: UpsertRemoteTaskPayload) {
-    const task = tasks.value.find((item) => item.source === payload.source && item.remoteId === payload.remoteId)
+    const localId = `${payload.source}:${payload.instanceId ? `${payload.instanceId}:` : ''}${payload.remoteId}`
+    const task = tasks.value.find(
+      (item) =>
+        item.source === payload.source &&
+        item.remoteId === payload.remoteId &&
+        (item.instanceId || '') === (payload.instanceId || '')
+    )
     if (task) {
       Object.assign(task, {
         name: payload.name || task.name,
         path: payload.path || task.path,
         status: payload.status,
+        instanceId: payload.instanceId || task.instanceId,
+        stage: payload.stage || task.stage,
         progress: payload.progress,
         speed: payload.speed ?? task.speed,
+        rawStatus: payload.rawStatus,
+        failureReason: payload.failureReason,
+        completedDir: payload.completedDir,
         message: payload.message,
         updatedAt: Date.now()
       })
@@ -65,15 +97,20 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     const next: TransferTask = {
-      id: `${payload.source}:${payload.remoteId}`,
+      id: localId,
       remoteId: payload.remoteId,
+      instanceId: payload.instanceId,
       source: payload.source,
       type: payload.type,
       status: payload.status,
+      stage: payload.stage,
       progress: payload.progress,
       speed: payload.speed ?? 0,
       path: payload.path,
       name: payload.name,
+      rawStatus: payload.rawStatus,
+      failureReason: payload.failureReason,
+      completedDir: payload.completedDir,
       message: payload.message,
       createdAt: Date.now(),
       updatedAt: Date.now()

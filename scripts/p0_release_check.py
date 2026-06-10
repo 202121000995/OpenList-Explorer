@@ -61,6 +61,13 @@ def main():
         aria2_run = run([str(ARIA2_BIN), "--version"])
         failures += not check(aria2_run.returncode == 0 and "aria2 version" in aria2_run.stdout, "Aria2 sidecar can execute")
 
+    multi_openlist = run([str(ROOT / "scripts" / "check_multi_openlist_state.cmd")], timeout=60)
+    failures += not check(multi_openlist.returncode == 0, "Multi OpenList instance isolation checks pass")
+    for line in multi_openlist.stdout.splitlines():
+        print(line)
+    for line in multi_openlist.stderr.splitlines():
+        print(line, file=sys.stderr)
+
     has_e2e_inputs = bool(os.environ.get("OPENLIST_TOKEN") or os.environ.get("OPENLIST_BIN"))
     if has_e2e_inputs:
         e2e = run([str(ROOT / "scripts" / "e2e_openlist_smoke.cmd")], timeout=180)
@@ -73,6 +80,23 @@ def main():
                 if "token" not in line.lower():
                     print(line)
             for line in e2e.stderr.splitlines():
+                if "token" not in line.lower():
+                    print(line, file=sys.stderr)
+
+        resume = run([str(ROOT / "scripts" / "check_openlist_upload_resume.cmd")], timeout=180)
+        require_resume = os.environ.get("OPENLIST_REQUIRE_UPLOAD_RESUME", "").strip().lower() in {"1", "true", "yes"}
+        if resume.returncode == 0:
+            result("PASS", "OpenList upload byte resume probe passed")
+        else:
+            if require_resume:
+                failures += 1
+                result("FAIL", "OpenList upload byte resume probe failed")
+            else:
+                result("WARN", "OpenList upload byte resume is unavailable; Explorer falls back to task-level retry")
+            for line in resume.stdout.splitlines():
+                if "token" not in line.lower():
+                    print(line)
+            for line in resume.stderr.splitlines():
                 if "token" not in line.lower():
                     print(line, file=sys.stderr)
     else:

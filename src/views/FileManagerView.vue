@@ -1182,8 +1182,12 @@ async function uploadLocalSelections(selections: LocalUploadSelection[]) {
       historyStore.add('upload', task.path)
     } catch (error) {
       if (tasksStore.taskById(task.id)?.status === 'canceled') return
-      tasksStore.updateTask(task.id, { status: 'failed' })
-      message.error(error instanceof Error ? error.message : '上传失败')
+      const text = error instanceof Error ? error.message : '上传失败'
+      tasksStore.updateTask(task.id, {
+        status: 'failed',
+        message: `${text}。可重试该任务；当前 OpenList 上传接口未确认支持字节级断点续传。`
+      })
+      message.error(text)
     }
   })
 
@@ -1241,8 +1245,12 @@ async function uploadFiles(pickedFiles: File[], preserveRelativePath = false) {
       tasksStore.updateTask(task.id, { status: 'success', progress: 100 })
       historyStore.add('upload', task.path)
     } catch (error) {
-      tasksStore.updateTask(task.id, { status: 'failed' })
-      message.error(error instanceof Error ? error.message : '上传失败')
+      const text = error instanceof Error ? error.message : '上传失败'
+      tasksStore.updateTask(task.id, {
+        status: 'failed',
+        message: `${text}。可重新上传；浏览器文件对象关闭后无法做字节级断点续传。`
+      })
+      message.error(text)
     }
   })
 

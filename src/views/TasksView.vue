@@ -37,9 +37,14 @@
           <n-descriptions-item label="类型">{{ detailTask.type === 'upload' ? '上传' : '下载' }}</n-descriptions-item>
           <n-descriptions-item label="来源">{{ detailTask.source === 'openlist-offline' ? 'OpenList 云下载' : '本地传输' }}</n-descriptions-item>
           <n-descriptions-item label="状态">{{ detailTask.status }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.stage" label="阶段">{{ taskStageLabel[detailTask.stage] }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.rawStatus" label="原始状态">{{ detailTask.rawStatus }}</n-descriptions-item>
           <n-descriptions-item label="进度">{{ detailTask.progress }}%</n-descriptions-item>
           <n-descriptions-item label="路径">{{ detailTask.path }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.completedDir" label="完成目录">{{ detailTask.completedDir }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.failureReason" label="失败原因">{{ detailTask.failureReason }}</n-descriptions-item>
           <n-descriptions-item v-if="detailTask.localPath" label="本地路径">{{ detailTask.localPath }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.instanceId" label="OpenList 实例">{{ detailTask.instanceId }}</n-descriptions-item>
           <n-descriptions-item v-if="detailTask.remoteId" label="远程任务 ID">{{ detailTask.remoteId }}</n-descriptions-item>
           <n-descriptions-item label="详情">{{ detailTask.message || '-' }}</n-descriptions-item>
         </n-descriptions>
@@ -71,6 +76,7 @@ import { syncOfflineDownloadTasks } from '@/services/offlineTasks'
 import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useTasksStore } from '@/stores/tasks'
+import { taskStageLabel } from '@/models/task'
 
 const props = defineProps<{
   type: 'upload' | 'download'
@@ -218,8 +224,12 @@ async function resumeUploadTask(id: string) {
     message.success(`${task.name} 上传完成`)
   } catch (error) {
     if (tasksStore.taskById(id)?.status === 'canceled') return
-    tasksStore.updateTask(id, { status: 'failed', message: error instanceof Error ? error.message : '上传失败' })
-    message.error(error instanceof Error ? error.message : '上传失败')
+    const text = error instanceof Error ? error.message : '上传失败'
+    tasksStore.updateTask(id, {
+      status: 'failed',
+      message: `${text}。可重试该任务；当前 OpenList 上传接口未确认支持字节级断点续传。`
+    })
+    message.error(text)
   }
 }
 
@@ -248,7 +258,7 @@ async function resumeDownloadTask(id: string) {
 }
 
 onMounted(restartCloudTaskTimer)
-watch(() => [props.type, settingsStore.hasToken] as const, restartCloudTaskTimer)
+watch(() => [props.type, settingsStore.hasToken, settingsStore.activeInstanceId, settingsStore.serverUrl] as const, restartCloudTaskTimer)
 onBeforeUnmount(() => {
   if (syncTimer !== null) window.clearInterval(syncTimer)
 })
