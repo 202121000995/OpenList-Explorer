@@ -252,7 +252,7 @@ def upload_installer(release):
     if not INSTALLER.exists():
         raise RuntimeError(f"Installer not found: {INSTALLER}")
 
-    asset_name = INSTALLER.name
+    asset_name = INSTALLER.name.replace(" ", ".")
     assets = api(f"repos/{OWNER}/{REPO}/releases/{release['id']}/assets")
     for asset in assets:
         if asset["name"] == asset_name:
