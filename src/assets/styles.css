@@ -848,6 +848,62 @@ button {
   border-radius: 8px;
 }
 
+.file-properties-card {
+  width: min(640px, 94vw);
+}
+
+.directory-picker {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-subtle);
+}
+
+.directory-picker-toolbar {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+}
+
+.directory-picker-state {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.directory-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.directory-picker-row:hover {
+  background: var(--app-hover);
+}
+
+.directory-picker-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modal-help {
   color: var(--app-muted);
   font-size: 13px;

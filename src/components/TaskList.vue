@@ -31,6 +31,15 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   { title: '名称', key: 'name', minWidth: 220 },
   { title: '路径', key: 'path', minWidth: 260 },
   {
+    title: '详情',
+    key: 'message',
+    minWidth: 220,
+    ellipsis: { tooltip: true },
+    render(row) {
+      return row.message || '-'
+    }
+  },
+  {
     title: '状态',
     key: 'status',
     width: 110,

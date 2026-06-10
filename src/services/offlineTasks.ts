@@ -14,6 +14,25 @@ function taskPath(task: OpenListTaskItem) {
   return String(task.path ?? task.dst ?? '')
 }
 
+function taskMessage(task: OpenListTaskItem, done: boolean) {
+  const error = String(task.error ?? task.err ?? '').trim()
+  if (error) return error
+
+  const raw = String(task.status ?? task.state ?? '').trim()
+  const lower = raw.toLowerCase()
+  const target = taskPath(task)
+  const prefix = done ? '已完成' : '云下载'
+
+  if (/wait|queue|pending|等待/.test(lower)) return `${prefix}：排队中${target ? `，保存到 ${target}` : ''}`
+  if (/upload|上传/.test(lower)) return `${prefix}：正在上传到 OpenList${target ? `，保存到 ${target}` : ''}`
+  if (/download|running|active|下载/.test(lower)) return `${prefix}：正在下载${target ? `，保存到 ${target}` : ''}`
+  if (/pause|暂停/.test(lower)) return `${prefix}：已暂停${target ? `，保存到 ${target}` : ''}`
+  if (/cancel|取消/.test(lower)) return `${prefix}：已取消${target ? `，目标 ${target}` : ''}`
+  if (/fail|error|err|失败/.test(lower)) return `${prefix}：失败${target ? `，目标 ${target}` : ''}`
+  if (done) return `已完成${target ? `，保存到 ${target}` : ''}`
+  return raw ? `${prefix}：${raw}${target ? `，保存到 ${target}` : ''}` : `${prefix}：状态同步中${target ? `，保存到 ${target}` : ''}`
+}
+
 function taskProgress(task: OpenListTaskItem, done: boolean) {
   if (done) return 100
   const value = Number(task.progress ?? task.percentage ?? 0)
@@ -55,7 +74,7 @@ function syncItems(items: OpenListTaskItem[], done: boolean) {
       status: taskStatus(item, done),
       progress: taskProgress(item, done),
       speed: Number(item.speed ?? 0) || 0,
-      message: String(item.error ?? item.err ?? '')
+      message: taskMessage(item, done)
     })
   })
 }

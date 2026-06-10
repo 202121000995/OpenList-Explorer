@@ -154,6 +154,31 @@
       <n-alert type="info" class="settings-alert">
         云下载能力由 OpenList 提供。Explorer 会读取 OpenList 已启用的下载工具；如果 OpenList 没有启用 Aria2，这里会明确显示。
       </n-alert>
+      <n-form label-placement="left" label-width="120" class="aria2-config-form">
+        <n-form-item label="自动启动">
+          <n-switch v-model:value="settingsStore.aria2AutoStart" />
+        </n-form-item>
+        <n-form-item label="RPC 端口">
+          <n-input-number v-model:value="settingsStore.aria2RpcPort" :min="1024" :max="65535" />
+        </n-form-item>
+        <n-form-item label="RPC 密钥">
+          <n-input
+            v-model:value="settingsStore.aria2RpcSecret"
+            type="password"
+            show-password-on="click"
+            placeholder="留空则不设置 RPC 密钥"
+          />
+        </n-form-item>
+        <n-form-item label="下载目录">
+          <n-input v-model:value="settingsStore.aria2DownloadDir" placeholder="留空则使用系统下载目录" />
+        </n-form-item>
+        <n-form-item label="并发任务">
+          <n-input-number v-model:value="settingsStore.aria2MaxConcurrent" :min="1" :max="32" />
+        </n-form-item>
+        <n-form-item label="连接分片">
+          <n-input-number v-model:value="settingsStore.aria2Split" :min="1" :max="32" />
+        </n-form-item>
+      </n-form>
       <n-descriptions :column="1" size="small" bordered>
         <n-descriptions-item label="OpenList 云下载工具">
           {{ offlineTools.length ? offlineTools.join(', ') : '未检测到' }}
@@ -168,7 +193,8 @@
           {{ aria2Status?.available ? '已包含' : '未包含' }}
         </n-descriptions-item>
         <n-descriptions-item v-if="aria2Status?.binary_path" label="Aria2 程序">{{ aria2Status.binary_path }}</n-descriptions-item>
-        <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? 'http://127.0.0.1:6800/jsonrpc' }}</n-descriptions-item>
+        <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</n-descriptions-item>
+        <n-descriptions-item label="当前下载目录">{{ aria2Status?.download_dir || settingsStore.aria2DownloadDir || '系统下载目录' }}</n-descriptions-item>
       </n-descriptions>
       <n-space justify="end" class="section-actions">
         <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新云下载状态</n-button>
@@ -386,12 +412,13 @@ async function refreshBuiltinStatus(showFeedback = true) {
 async function refreshCloudDownloadStatus(showFeedback = true) {
   loadingCloudTools.value = true
   try {
-    aria2Status.value = await getLocalAria2Status()
+    aria2Status.value = await getLocalAria2Status(settingsStore.aria2RpcPort)
   } catch {
     aria2Status.value = {
       available: false,
       running: false,
-      rpc_url: 'http://127.0.0.1:6800/jsonrpc',
+      rpc_url: `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`,
+      rpc_port: settingsStore.aria2RpcPort,
       message: '当前环境无法检测本机 Aria2。'
     }
   }
@@ -416,7 +443,13 @@ async function refreshCloudDownloadStatus(showFeedback = true) {
 async function startAria2Rpc() {
   startingAria2.value = true
   try {
-    aria2Status.value = await startLocalAria2()
+    aria2Status.value = await startLocalAria2({
+      rpcPort: settingsStore.aria2RpcPort,
+      rpcSecret: settingsStore.aria2RpcSecret,
+      downloadDir: settingsStore.aria2DownloadDir,
+      maxConcurrent: settingsStore.aria2MaxConcurrent,
+      split: settingsStore.aria2Split
+    })
     message.success(aria2Status.value.message)
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'Aria2 启动失败')
@@ -554,6 +587,10 @@ async function clearToken() {
 
 onMounted(() => {
   refreshBuiltinStatus(false)
-  refreshCloudDownloadStatus(false)
+  refreshCloudDownloadStatus(false).then(() => {
+    if (settingsStore.aria2AutoStart && aria2Status.value?.available && !aria2Status.value.running) {
+      startAria2Rpc()
+    }
+  })
 })
 </script>

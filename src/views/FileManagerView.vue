@@ -203,7 +203,29 @@
 
       <n-modal v-model:show="transferDialog">
         <n-card class="modal-card" :title="transferMode === 'copy' ? '复制到' : '移动到'" role="dialog" aria-modal="true">
-          <n-input v-model:value="destinationPath" placeholder="目标目录路径，例如 /OneDrive/备份" @keydown.enter="submitTransfer" />
+          <n-space vertical>
+            <n-input v-model:value="destinationPath" placeholder="目标目录路径，例如 /OneDrive/备份" @keydown.enter="submitTransfer" />
+            <div class="directory-picker">
+              <div class="directory-picker-toolbar">
+                <n-button size="small" secondary @click="loadTransferFolders(dirname(destinationPath) || '/')">上一级</n-button>
+                <n-button size="small" secondary :loading="transferFoldersLoading" @click="loadTransferFolders(destinationPath)">刷新</n-button>
+              </div>
+              <div v-if="transferFoldersLoading" class="directory-picker-state">正在读取目录...</div>
+              <div v-else-if="!transferFolders.length" class="directory-picker-state">当前目录没有子文件夹</div>
+              <template v-else>
+                <button
+                  v-for="folder in transferFolders"
+                  :key="folder.path"
+                  class="directory-picker-row"
+                  type="button"
+                  @click="loadTransferFolders(folder.path)"
+                >
+                  <Folder :size="17" class="folder-icon" />
+                  <span>{{ folder.name }}</span>
+                </button>
+              </template>
+            </div>
+          </n-space>
           <template #footer>
             <n-space justify="space-between" align="center">
               <span class="modal-help">{{ filesStore.selectedPaths.length }} 个项目</span>
@@ -230,6 +252,36 @@
             <n-space justify="end">
               <n-button @click="cloudDownloadDialog = false">取消</n-button>
               <n-button type="primary" :loading="cloudSubmitting" @click="submitCloudDownload">提交下载</n-button>
+            </n-space>
+          </template>
+        </n-card>
+      </n-modal>
+
+      <n-modal v-model:show="propertiesDialog">
+        <n-card class="modal-card file-properties-card" title="属性" role="dialog" aria-modal="true">
+          <n-descriptions v-if="propertiesFile" :column="1" size="small" bordered>
+            <n-descriptions-item label="名称">{{ propertiesFile.name }}</n-descriptions-item>
+            <n-descriptions-item label="类型">{{ fileKindLabel(propertiesFile) }}</n-descriptions-item>
+            <n-descriptions-item label="大小">{{ propertiesFile.type === 'folder' ? '-' : formatBytes(propertiesFile.size) }}</n-descriptions-item>
+            <n-descriptions-item label="修改时间">{{ formatDate(propertiesFile.modifiedAt) }}</n-descriptions-item>
+            <n-descriptions-item label="存储">{{ storageStore.activeStorage?.name || '-' }}</n-descriptions-item>
+            <n-descriptions-item label="路径">
+              <span class="secret-row">
+                <span>{{ propertiesFile.path }}</span>
+                <n-button size="tiny" secondary @click="copyText(propertiesFile.path, '路径已复制')">复制</n-button>
+              </span>
+            </n-descriptions-item>
+            <n-descriptions-item v-if="propertiesRawUrl" label="直链">
+              <span class="secret-row">
+                <span>{{ propertiesRawUrl }}</span>
+                <n-button size="tiny" secondary @click="copyText(propertiesRawUrl, '直链已复制')">复制</n-button>
+              </span>
+            </n-descriptions-item>
+            <n-descriptions-item v-else-if="propertiesLoading" label="直链">正在获取...</n-descriptions-item>
+          </n-descriptions>
+          <template #footer>
+            <n-space justify="end">
+              <n-button @click="propertiesDialog = false">关闭</n-button>
             </n-space>
           </template>
         </n-card>
@@ -268,6 +320,7 @@ import {
   Folder,
   FolderPlus,
   Grid2X2,
+  Info,
   Link,
   ListFilter,
   MoveRight,
@@ -336,12 +389,18 @@ const transferMode = ref<TransferMode>('copy')
 const folderName = ref('')
 const renameValue = ref('')
 const destinationPath = ref('')
+const transferFolders = ref<Array<{ name: string; path: string }>>([])
+const transferFoldersLoading = ref(false)
 const cloudUrls = ref('')
 const cloudTool = ref('SimpleHttp')
 const cloudTools = ref<string[]>(['SimpleHttp'])
 const cloudTargetPath = ref('')
 const cloudSubmitting = ref(false)
 const activeFile = ref<ExplorerFileItem | null>(null)
+const propertiesDialog = ref(false)
+const propertiesFile = ref<ExplorerFileItem | null>(null)
+const propertiesRawUrl = ref('')
+const propertiesLoading = ref(false)
 let unlistenDragDrop: UnlistenFn | null = null
 
 function delay(ms: number) {
@@ -467,6 +526,7 @@ const contextOptions = computed<DropdownOption[]>(() => {
     { label: '复制路径', key: 'copyPath', icon: renderIcon(Copy) },
     { label: '收藏', key: 'favorite', icon: renderIcon(Star) },
     { label: '重命名', key: 'rename', icon: renderIcon(Pencil) },
+    { label: '属性', key: 'properties', icon: renderIcon(Info) },
     { label: '删除', key: 'delete', icon: renderIcon(Trash2) }
   ]
 })
@@ -744,6 +804,7 @@ async function handleContextSelect(key: string) {
   if (key === 'copyRawUrl') await copyRawUrl(file)
   if (key === 'favorite') favoritesStore.toggle(storageStore.activeStorageId, file.path)
   if (key === 'rename') startRename(file)
+  if (key === 'properties') openProperties(file)
   if (key === 'delete') confirmDelete(file)
 }
 
@@ -760,6 +821,22 @@ async function copyRawUrl(file: ExplorerFileItem) {
 function openMkdir() {
   folderName.value = ''
   mkdirDialog.value = true
+}
+
+async function openProperties(file: ExplorerFileItem) {
+  propertiesFile.value = file
+  propertiesRawUrl.value = ''
+  propertiesDialog.value = true
+  if (file.type === 'folder') return
+
+  propertiesLoading.value = true
+  try {
+    propertiesRawUrl.value = await filesStore.getRawUrl(file)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '直链获取失败')
+  } finally {
+    propertiesLoading.value = false
+  }
 }
 
 async function openCloudDownload() {
@@ -862,6 +939,24 @@ function openTransfer(mode: TransferMode) {
   transferMode.value = mode
   destinationPath.value = filesStore.currentPath
   transferDialog.value = true
+  loadTransferFolders(destinationPath.value)
+}
+
+async function loadTransferFolders(path: string) {
+  const target = path.trim() || '/'
+  destinationPath.value = target
+  transferFoldersLoading.value = true
+  try {
+    const response = await fsApi.list({ path: target, page: 1, per_page: 500, refresh: false })
+    transferFolders.value = (response.content ?? [])
+      .filter((item) => item.is_dir)
+      .map((item) => ({ name: item.name, path: joinPath(target, item.name) }))
+  } catch (error) {
+    transferFolders.value = []
+    message.error(error instanceof Error ? error.message : '目录读取失败')
+  } finally {
+    transferFoldersLoading.value = false
+  }
 }
 
 async function submitTransfer() {

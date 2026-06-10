@@ -101,6 +101,19 @@ $env:OPENLIST_FORCE_BIN_DIR="1"
 
 它会检查版本一致性、OpenList/Aria2 sidecar、安装包是否存在、sidecar 是否可执行、内置 OpenList 首次初始化是否能生成管理信息。设置 `OPENLIST_TOKEN` 或 `OPENLIST_BIN` 后，还会自动运行真实 OpenList API smoke test。
 
+## Upload Resume Probe
+
+字节级上传断点续传取决于 OpenList `/api/fs/form` 是否支持分片组装。可以执行：
+
+```powershell
+$env:OPENLIST_URL="http://127.0.0.1:5244"
+$env:OPENLIST_BIN="D:\wenjian\openlist-windows-amd64\openlist.exe"
+$env:OPENLIST_FORCE_BIN_DIR="1"
+.\scripts\check_openlist_upload_resume.cmd
+```
+
+当前实测结果：OpenList 未按 `Content-Range` 组装两段上传内容，因此 Explorer 只能提供上传暂停/取消/失败后重新上传，不能标称为字节级断点续传。
+
 ## 发布
 
 发布脚本通过 GitHub CLI 和 GitHub API 上传源码与安装包：

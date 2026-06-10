@@ -54,6 +54,8 @@ struct LocalAria2Status {
     available: bool,
     running: bool,
     rpc_url: String,
+    rpc_port: u16,
+    download_dir: Option<String>,
     binary_path: Option<String>,
     message: String,
 }
@@ -1320,14 +1322,17 @@ fn builtin_openlist_status(app: AppHandle) -> Result<BuiltinOpenListStatus, Stri
 }
 
 #[tauri::command]
-fn local_aria2_status(app: AppHandle) -> Result<LocalAria2Status, String> {
+fn local_aria2_status(app: AppHandle, rpc_port: Option<u16>) -> Result<LocalAria2Status, String> {
     let binary = aria2_binary(&app);
-    let running = is_local_port_open(6800);
+    let port = rpc_port.unwrap_or(6800);
+    let running = is_local_port_open(port);
 
     Ok(LocalAria2Status {
         available: binary.is_some(),
         running,
-        rpc_url: "http://127.0.0.1:6800/jsonrpc".to_string(),
+        rpc_url: format!("http://127.0.0.1:{port}/jsonrpc"),
+        rpc_port: port,
+        download_dir: Some(default_download_dir().display().to_string()),
         binary_path: binary.as_ref().map(|path| path.display().to_string()),
         message: if binary.is_some() {
             if running {
@@ -1342,12 +1347,27 @@ fn local_aria2_status(app: AppHandle) -> Result<LocalAria2Status, String> {
 }
 
 #[tauri::command]
-fn start_local_aria2(app: AppHandle) -> Result<LocalAria2Status, String> {
+fn start_local_aria2(
+    app: AppHandle,
+    rpc_port: u16,
+    rpc_secret: Option<String>,
+    download_dir: Option<String>,
+    max_concurrent: Option<u16>,
+    split: Option<u16>,
+) -> Result<LocalAria2Status, String> {
     let binary = aria2_binary(&app).ok_or_else(|| {
         "未找到 aria2c.exe。请把 aria2c.exe 放到安装目录、安装目录的 binaries 子目录，或加入系统 PATH。".to_string()
     })?;
+    let port = if rpc_port == 0 { 6800 } else { rpc_port };
+    let max_concurrent = max_concurrent.unwrap_or(5).clamp(1, 32);
+    let split = split.unwrap_or(8).clamp(1, 32);
+    let download_dir = download_dir
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(default_download_dir);
 
-    if !is_local_port_open(6800) {
+    if !is_local_port_open(port) {
         let aria2_dir = app
             .path()
             .app_data_dir()
@@ -1359,33 +1379,37 @@ fn start_local_aria2(app: AppHandle) -> Result<LocalAria2Status, String> {
             fs::write(&session_path, "").map_err(|error| format!("无法创建 Aria2 session 文件: {error}"))?;
         }
 
-        hidden_command(&binary)
-            .args([
-                "--enable-rpc=true",
-                "--rpc-listen-all=false",
-                "--rpc-listen-port=6800",
-                "--continue=true",
-                "--max-concurrent-downloads=5",
-                "--split=8",
-                "--max-connection-per-server=8",
-                "--auto-file-renaming=true",
-                "--save-session-interval=30",
-            ])
-            .arg(format!("--dir={}", default_download_dir().display()))
-            .arg(format!("--input-file={}", session_path.display()))
-            .arg(format!("--save-session={}", session_path.display()))
-            .spawn()
-            .map_err(|error| format!("无法启动 Aria2: {error}"))?;
+        let mut command = hidden_command(&binary);
+        command.args([
+            "--enable-rpc=true",
+            "--rpc-listen-all=false",
+            "--continue=true",
+            "--auto-file-renaming=true",
+            "--save-session-interval=30",
+        ]);
+        command.arg(format!("--rpc-listen-port={port}"));
+        command.arg(format!("--max-concurrent-downloads={max_concurrent}"));
+        command.arg(format!("--split={split}"));
+        command.arg(format!("--max-connection-per-server={split}"));
+        command.arg(format!("--dir={}", download_dir.display()));
+        command.arg(format!("--input-file={}", session_path.display()));
+        command.arg(format!("--save-session={}", session_path.display()));
+        if let Some(secret) = rpc_secret.map(|value| value.trim().to_string()).filter(|value| !value.is_empty()) {
+            command.arg(format!("--rpc-secret={secret}"));
+        }
+        command.spawn().map_err(|error| format!("无法启动 Aria2: {error}"))?;
 
         for _ in 0..20 {
-            if is_local_port_open(6800) {
+            if is_local_port_open(port) {
                 break;
             }
             thread::sleep(Duration::from_millis(250));
         }
     }
 
-    local_aria2_status(app)
+    let mut status = local_aria2_status(app, Some(port))?;
+    status.download_dir = Some(download_dir.display().to_string());
+    Ok(status)
 }
 
 #[tauri::command]

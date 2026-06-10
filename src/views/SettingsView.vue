@@ -35,6 +35,9 @@
         <n-form-item label="下载线程">
           <n-input-number v-model:value="settingsStore.downloadThreads" :min="1" :max="16" />
         </n-form-item>
+        <n-alert type="warning" class="settings-alert">
+          当前 OpenList 上传接口实测未按 Content-Range 组装分片；上传支持暂停、取消和失败后重试，但不是字节级断点续传。
+        </n-alert>
       </n-form>
     </section>
   </div>

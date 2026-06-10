@@ -21,6 +21,8 @@ export interface LocalAria2Status {
   available: boolean
   running: boolean
   rpc_url: string
+  rpc_port: number
+  download_dir?: string
   binary_path?: string
   message: string
 }
@@ -29,12 +31,20 @@ export async function getBuiltinOpenListStatus() {
   return invoke<BuiltinOpenListStatus>('builtin_openlist_status')
 }
 
-export async function getLocalAria2Status() {
-  return invoke<LocalAria2Status>('local_aria2_status')
+export async function getLocalAria2Status(rpcPort = 6800) {
+  return invoke<LocalAria2Status>('local_aria2_status', { rpcPort })
 }
 
-export async function startLocalAria2() {
-  return invoke<LocalAria2Status>('start_local_aria2')
+export interface StartAria2Payload {
+  rpcPort: number
+  rpcSecret?: string
+  downloadDir?: string
+  maxConcurrent: number
+  split: number
+}
+
+export async function startLocalAria2(payload: StartAria2Payload) {
+  return invoke<LocalAria2Status>('start_local_aria2', { ...payload })
 }
 
 export async function startBuiltinOpenList() {

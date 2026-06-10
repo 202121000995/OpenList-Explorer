@@ -34,6 +34,12 @@ interface SettingsSnapshot {
   downloadDir: string
   uploadThreads: number
   downloadThreads: number
+  aria2RpcPort: number
+  aria2RpcSecret: string
+  aria2DownloadDir: string
+  aria2AutoStart: boolean
+  aria2MaxConcurrent: number
+  aria2Split: number
 }
 
 function createId() {
@@ -56,6 +62,12 @@ export const useSettingsStore = defineStore('settings', () => {
   const downloadDir = useStorage('openlist.downloadDir', '')
   const uploadThreads = useStorage('openlist.uploadThreads', 3)
   const downloadThreads = useStorage('openlist.downloadThreads', 3)
+  const aria2RpcPort = useStorage('openlist.aria2RpcPort', 6800)
+  const aria2RpcSecret = useStorage('openlist.aria2RpcSecret', '')
+  const aria2DownloadDir = useStorage('openlist.aria2DownloadDir', '')
+  const aria2AutoStart = useStorage('openlist.aria2AutoStart', false)
+  const aria2MaxConcurrent = useStorage('openlist.aria2MaxConcurrent', 5)
+  const aria2Split = useStorage('openlist.aria2Split', 8)
   const cacheSize = ref('0 MB')
   const hasToken = ref(false)
   let hydrated = false
@@ -206,6 +218,12 @@ export const useSettingsStore = defineStore('settings', () => {
       downloadDir.value = saved.downloadDir || downloadDir.value
       uploadThreads.value = saved.uploadThreads || uploadThreads.value
       downloadThreads.value = saved.downloadThreads || downloadThreads.value
+      aria2RpcPort.value = saved.aria2RpcPort || aria2RpcPort.value
+      aria2RpcSecret.value = saved.aria2RpcSecret || aria2RpcSecret.value
+      aria2DownloadDir.value = saved.aria2DownloadDir || aria2DownloadDir.value
+      aria2AutoStart.value = saved.aria2AutoStart ?? aria2AutoStart.value
+      aria2MaxConcurrent.value = saved.aria2MaxConcurrent || aria2MaxConcurrent.value
+      aria2Split.value = saved.aria2Split || aria2Split.value
       ensureInstances()
     }
     hydrated = true
@@ -223,7 +241,13 @@ export const useSettingsStore = defineStore('settings', () => {
       fileSortOrder,
       downloadDir,
       uploadThreads,
-      downloadThreads
+      downloadThreads,
+      aria2RpcPort,
+      aria2RpcSecret,
+      aria2DownloadDir,
+      aria2AutoStart,
+      aria2MaxConcurrent,
+      aria2Split
     ],
     () => {
       if (!hydrated) return
@@ -238,7 +262,13 @@ export const useSettingsStore = defineStore('settings', () => {
         fileSortOrder: fileSortOrder.value,
         downloadDir: downloadDir.value,
         uploadThreads: uploadThreads.value,
-        downloadThreads: downloadThreads.value
+        downloadThreads: downloadThreads.value,
+        aria2RpcPort: aria2RpcPort.value,
+        aria2RpcSecret: aria2RpcSecret.value,
+        aria2DownloadDir: aria2DownloadDir.value,
+        aria2AutoStart: aria2AutoStart.value,
+        aria2MaxConcurrent: aria2MaxConcurrent.value,
+        aria2Split: aria2Split.value
       })
     },
     { deep: true }
@@ -260,6 +290,12 @@ export const useSettingsStore = defineStore('settings', () => {
     downloadDir,
     uploadThreads,
     downloadThreads,
+    aria2RpcPort,
+    aria2RpcSecret,
+    aria2DownloadDir,
+    aria2AutoStart,
+    aria2MaxConcurrent,
+    aria2Split,
     cacheSize,
     hasToken,
     effectiveTheme,
