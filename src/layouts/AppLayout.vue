@@ -119,6 +119,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useStorageStore } from '@/stores/storage'
 import { useTasksStore } from '@/stores/tasks'
+import { startBuiltinOpenList } from '@/services/builtinOpenList'
 import { syncOfflineDownloadTasks } from '@/services/offlineTasks'
 import type { TransferStatus } from '@/models/task'
 
@@ -208,6 +209,23 @@ function restartOfflineTaskSync() {
   if (settingsStore.hasToken) startOfflineTaskSync()
 }
 
+async function ensureActiveOpenListRuntime() {
+  if (!settingsStore.activeInstance?.isBuiltin) return
+  try {
+    const session = await startBuiltinOpenList()
+    settingsStore.serverUrl = session.server_url
+    settingsStore.updateInstance(settingsStore.activeInstanceId, {
+      name: '本机 OpenList',
+      serverUrl: session.server_url,
+      username: 'admin',
+      isBuiltin: true
+    })
+    await settingsStore.updateToken(session.token)
+  } catch {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     settingsStore.hydrateFromDatabase(),
@@ -226,6 +244,7 @@ onMounted(async () => {
   })
 
   settingsStore.ensureInstances()
+  await ensureActiveOpenListRuntime()
   const hasToken = await settingsStore.initializeToken()
   if (!hasToken && localStorage.getItem('openlist.onboardingDone') !== '1') {
     showOnboarding.value = true

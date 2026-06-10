@@ -188,15 +188,27 @@
               <n-input-number v-model:value="settingsStore.aria2Split" :min="1" :max="32" />
             </n-form-item>
           </n-form>
-          <n-descriptions :column="1" size="small" bordered>
-            <n-descriptions-item label="随包 Aria2">{{ aria2Status?.available ? '已包含' : '未包含' }}</n-descriptions-item>
-            <n-descriptions-item label="连接状态">{{ aria2ConnectionText }}</n-descriptions-item>
-            <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</n-descriptions-item>
-            <n-descriptions-item label="下载目录">{{ effectiveAria2DownloadDir }}</n-descriptions-item>
-          </n-descriptions>
+          <div class="setting-kv-grid">
+            <div>
+              <span>随包 Aria2</span>
+              <strong>{{ aria2Status?.available ? '已包含' : '未包含' }}</strong>
+            </div>
+            <div>
+              <span>连接状态</span>
+              <strong>{{ aria2ConnectionText }}</strong>
+            </div>
+            <div class="wide">
+              <span>RPC 地址</span>
+              <strong>{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</strong>
+            </div>
+            <div class="wide">
+              <span>下载目录</span>
+              <strong>{{ effectiveAria2DownloadDir }}</strong>
+            </div>
+          </div>
           <n-space justify="end" class="section-actions">
             <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新状态</n-button>
-            <n-button type="primary" :loading="startingAria2" @click="startAria2Rpc">一键连接 Aria2</n-button>
+            <n-button type="primary" :loading="startingAria2" @click="enableAria2OneClick">一键启用 Aria2</n-button>
           </n-space>
         </div>
 
@@ -205,18 +217,32 @@
           <n-alert :type="openListAria2Enabled ? 'success' : 'warning'" class="settings-alert">
             {{ openListAria2Hint }}
           </n-alert>
-          <n-descriptions :column="1" size="small" bordered>
-            <n-descriptions-item label="云下载工具">
-              {{ offlineTools.length ? offlineTools.join(', ') : '未检测到' }}
-            </n-descriptions-item>
-            <n-descriptions-item label="OpenList Aria2">{{ openListAria2Text }}</n-descriptions-item>
-            <n-descriptions-item label="配置端口">{{ settingsStore.aria2RpcPort }}</n-descriptions-item>
-            <n-descriptions-item label="配置密钥">{{ settingsStore.aria2RpcSecret ? '已设置' : '未设置' }}</n-descriptions-item>
-            <n-descriptions-item label="下载目录">{{ effectiveAria2DownloadDir }}</n-descriptions-item>
-          </n-descriptions>
+          <div class="setting-kv-grid">
+            <div class="wide">
+              <span>云下载工具</span>
+              <strong>{{ offlineTools.length ? offlineTools.join('、') : '未检测到' }}</strong>
+            </div>
+            <div>
+              <span>OpenList Aria2</span>
+              <strong>{{ openListAria2Text }}</strong>
+            </div>
+            <div>
+              <span>配置端口</span>
+              <strong>{{ settingsStore.aria2RpcPort }}</strong>
+            </div>
+            <div>
+              <span>配置密钥</span>
+              <strong>{{ settingsStore.aria2RpcSecret ? '已设置' : '未设置' }}</strong>
+            </div>
+            <div class="wide">
+              <span>下载目录</span>
+              <strong>{{ effectiveAria2DownloadDir }}</strong>
+            </div>
+          </div>
           <n-space justify="end" class="section-actions">
             <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新工具</n-button>
             <n-button @click="copyAria2OpenListConfig">复制配置</n-button>
+            <n-button type="primary" :loading="startingAria2" @click="enableAria2OneClick">一键启用</n-button>
             <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('current')">用浏览器打开管理端</n-button>
           </n-space>
         </div>
@@ -237,6 +263,7 @@ import {
   getBuiltinOpenListStatus,
   getLocalAria2Status,
   openExternalUrl,
+  resetBuiltinOpenListAdminPassword,
   startLocalAria2,
   startBuiltinOpenList,
   type BuiltinOpenListStatus,
@@ -342,7 +369,7 @@ const openListAria2Text = computed(() => {
 const openListAria2Enabled = computed(() => offlineTools.value.some((tool) => /aria2/i.test(tool)))
 const openListAria2Hint = computed(() => {
   if (openListAria2Enabled.value) return 'OpenList 已启用 Aria2，云下载任务可以选择 Aria2。'
-  return 'Aria2 的启用入口在 OpenList 管理端的离线下载工具设置里；Explorer 这里只负责启动本机 Aria2 RPC 并提供配置。'
+  return '点击“一键启用”后，Explorer 会启动本机 Aria2，并把 RPC 配置写入 OpenList。'
 })
 const aria2ConnectionText = computed(() => {
   if (aria2Status.value?.running) return '本机已连接'
@@ -498,6 +525,38 @@ async function startAria2Rpc() {
   }
 }
 
+async function configureOpenListAria2() {
+  if (!settingsStore.hasToken) {
+    throw new Error('请先连接 OpenList')
+  }
+  await fsApi.saveAdminSetting('aria2_uri', `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`)
+  await fsApi.saveAdminSetting('aria2_secret', settingsStore.aria2RpcSecret || '')
+}
+
+async function enableAria2OneClick() {
+  startingAria2.value = true
+  try {
+    aria2Status.value = await startLocalAria2({
+      rpcPort: settingsStore.aria2RpcPort,
+      rpcSecret: settingsStore.aria2RpcSecret,
+      downloadDir: settingsStore.downloadDir,
+      maxConcurrent: settingsStore.aria2MaxConcurrent,
+      split: settingsStore.aria2Split
+    })
+    await configureOpenListAria2()
+    await refreshCloudDownloadStatus(false)
+    if (!openListAria2Enabled.value) {
+      message.warning('本机 Aria2 已启动，但 OpenList 暂未返回 Aria2 工具。请确认当前 OpenList 版本支持通过管理 API 写入 Aria2 配置。')
+      return
+    }
+    message.success('Aria2 已一键启用')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'Aria2 启用失败')
+  } finally {
+    startingAria2.value = false
+  }
+}
+
 async function copyAria2OpenListConfig() {
   const lines = [
     `RPC 地址：http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`,
@@ -544,7 +603,7 @@ async function openOpenListAdmin(target: 'builtin' | 'current') {
 
     if (shouldStartBuiltin) {
       const session = await startBuiltinOpenList()
-      builtinAdminPassword.value = session.admin_password
+      builtinAdminPassword.value = await resetBuiltinOpenListAdminPassword()
       url = session.server_url
       settingsStore.serverUrl = session.server_url
       settingsStore.updateInstance(settingsStore.activeInstanceId, {
@@ -561,7 +620,7 @@ async function openOpenListAdmin(target: 'builtin' | 'current') {
         data_dir: session.data_dir,
         message: '内置 OpenList 已运行'
       }
-      await copyText(session.admin_password, '网页登录密码已复制')
+      await copyText(builtinAdminPassword.value, '网页登录密码已复制')
       message.success('网页登录密码已复制，请在浏览器中使用 admin 登录')
     }
 

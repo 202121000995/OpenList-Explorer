@@ -37,6 +37,16 @@ export interface OpenListTaskItem {
   [key: string]: unknown
 }
 
+export interface OpenListSettingItem {
+  key?: string
+  value?: string
+  group?: string
+  flag?: number
+  help?: string
+  type?: string
+  [key: string]: unknown
+}
+
 export const fsApi = {
   list(payload: FileListRequest) {
     return openListHttp.post<unknown, FileListResponse>('/api/fs/list', payload)
@@ -95,6 +105,14 @@ export const fsApi = {
 
   offlineDownloadTools() {
     return openListHttp.get<unknown, string[]>('/api/public/offline_download_tools')
+  },
+
+  adminSettings() {
+    return openListHttp.get<unknown, OpenListSettingItem[]>('/api/admin/setting/list')
+  },
+
+  saveAdminSetting(key: string, value: string) {
+    return openListHttp.post('/api/admin/setting/save', { key, value })
   },
 
   offlineDownloadUndoneTasks() {

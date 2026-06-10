@@ -51,6 +51,10 @@ export async function startBuiltinOpenList() {
   return invoke<BuiltinOpenListSession>('start_builtin_openlist')
 }
 
+export async function resetBuiltinOpenListAdminPassword() {
+  return invoke<string>('reset_builtin_openlist_admin_password')
+}
+
 export async function openExternalUrl(url: string) {
   return invoke<void>('open_external_url', { url })
 }

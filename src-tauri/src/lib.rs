@@ -480,6 +480,13 @@ fn reset_builtin_admin_password(binary: &PathBuf, data_dir: &PathBuf) -> Result<
     Ok(password)
 }
 
+fn ensure_builtin_admin_password(binary: &PathBuf, data_dir: &PathBuf) -> Result<String, String> {
+    if let Some(password) = read_openlist_token(BUILTIN_ADMIN_PASSWORD_ID.to_string())? {
+        return Ok(password);
+    }
+    reset_builtin_admin_password(binary, data_dir)
+}
+
 fn default_download_dir() -> PathBuf {
     std::env::var_os("USERPROFILE")
         .map(PathBuf::from)
@@ -1596,7 +1603,7 @@ fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, Stri
     }
 
     let token = read_admin_token(&binary, &data_dir)?;
-    let admin_password = reset_builtin_admin_password(&binary, &data_dir)?;
+    let admin_password = ensure_builtin_admin_password(&binary, &data_dir)?;
 
     Ok(BuiltinOpenListSession {
         server_url: BUILTIN_OPENLIST_URL.to_string(),
@@ -1605,6 +1612,14 @@ fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, Stri
         admin_username: "admin".to_string(),
         admin_password,
     })
+}
+
+#[tauri::command]
+fn reset_builtin_openlist_admin_password(app: AppHandle) -> Result<String, String> {
+    let binary = managed_openlist_binary(&app)?;
+    let data_dir = app_data_dir(&app)?;
+    ensure_builtin_openlist_config(&binary, &data_dir)?;
+    reset_builtin_admin_password(&binary, &data_dir)
 }
 
 #[tauri::command]
@@ -1658,6 +1673,7 @@ pub fn run() {
             local_aria2_status,
             start_local_aria2,
             start_builtin_openlist,
+            reset_builtin_openlist_admin_password,
             open_external_url,
             save_openlist_token,
             read_openlist_token,

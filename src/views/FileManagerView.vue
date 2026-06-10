@@ -260,7 +260,7 @@
                 <span>RPC 密钥：{{ settingsStore.aria2RpcSecret || '未设置' }}</span>
               </div>
               <n-space size="small">
-                <n-button size="small" secondary @click="copyAria2ConfigForOpenList">复制 Aria2 配置</n-button>
+                <n-button size="small" type="primary" :loading="enablingCloudAria2" @click="enableCloudAria2OneClick">一键启用 Aria2</n-button>
                 <n-button size="small" type="primary" ghost @click="openOpenListAdminForAria2">打开 OpenList 管理端</n-button>
               </n-space>
             </div>
@@ -368,7 +368,7 @@ import {
 } from '@lucide/vue'
 import StorageSidebar from '@/components/StorageSidebar.vue'
 import { fsApi } from '@/api/fs'
-import { openExternalUrl } from '@/services/builtinOpenList'
+import { openExternalUrl, startLocalAria2 } from '@/services/builtinOpenList'
 import type { ExplorerFileItem } from '@/models/file'
 import { useClipboardAction } from '@/hooks/useClipboard'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -432,6 +432,7 @@ const cloudTool = ref('SimpleHttp')
 const cloudTools = ref<string[]>(['SimpleHttp'])
 const cloudTargetPath = ref('')
 const cloudSubmitting = ref(false)
+const enablingCloudAria2 = ref(false)
 const activeFile = ref<ExplorerFileItem | null>(null)
 const propertiesDialog = ref(false)
 const propertiesFile = ref<ExplorerFileItem | null>(null)
@@ -873,6 +874,41 @@ async function copyAria2ConfigForOpenList() {
     `下载目录：${settingsStore.downloadDir || '系统下载目录'}`
   ]
   await copyText(lines.join('\n'), 'Aria2 配置已复制')
+}
+
+async function configureOpenListAria2() {
+  if (!settingsStore.hasToken) {
+    throw new Error('请先连接 OpenList')
+  }
+  await fsApi.saveAdminSetting('aria2_uri', aria2RpcUrl.value)
+  await fsApi.saveAdminSetting('aria2_secret', settingsStore.aria2RpcSecret || '')
+}
+
+async function enableCloudAria2OneClick() {
+  enablingCloudAria2.value = true
+  try {
+    await startLocalAria2({
+      rpcPort: settingsStore.aria2RpcPort,
+      rpcSecret: settingsStore.aria2RpcSecret,
+      downloadDir: settingsStore.downloadDir,
+      maxConcurrent: settingsStore.aria2MaxConcurrent,
+      split: settingsStore.aria2Split
+    })
+    await configureOpenListAria2()
+    const tools = await fsApi.offlineDownloadTools()
+    cloudTools.value = tools.length ? tools : cloudTools.value
+    const aria2 = tools.find((tool) => /aria2/i.test(tool))
+    if (aria2) {
+      cloudTool.value = aria2
+      message.success('Aria2 已一键启用')
+      return
+    }
+    message.warning('本机 Aria2 已启动，但 OpenList 暂未返回 Aria2 工具。请确认当前 OpenList 版本支持通过管理 API 写入 Aria2 配置。')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'Aria2 启用失败')
+  } finally {
+    enablingCloudAria2.value = false
+  }
 }
 
 async function openOpenListAdminForAria2() {
