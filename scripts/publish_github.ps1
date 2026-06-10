@@ -5,6 +5,7 @@ $PackageJson = Get-Content -Raw -Encoding UTF8 (Join-Path $ProjectRoot "package.
 $Version = $PackageJson.version
 $Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_$($Version)_x64-setup.exe"
 $Publisher = Join-Path $ProjectRoot "scripts\publish_github.py"
+$P0Check = Join-Path $ProjectRoot "scripts\p0_release_check.py"
 
 Write-Host "Project:   $ProjectRoot"
 Write-Host "Version:   $Version"
@@ -16,6 +17,9 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 
 if (-not (Test-Path $Publisher)) {
   throw "Publish script not found: $Publisher"
+}
+if (-not (Test-Path $P0Check)) {
+  throw "P0 release check script not found: $P0Check"
 }
 
 if (-not (Test-Path $Installer)) {
@@ -37,6 +41,13 @@ if ($Python) {
 }
 if (-not $PythonExe) {
   throw "Python was not found. Install Python, add it to PATH, or run this from Codex Desktop where the bundled Python runtime exists."
+}
+
+Write-Host ""
+Write-Host "> P0 release check"
+& $PythonExe $P0Check
+if ($LASTEXITCODE -ne 0) {
+  throw "P0 release check failed. Fix the release blockers before publishing."
 }
 
 Write-Host ""

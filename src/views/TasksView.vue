@@ -3,9 +3,21 @@
     <div class="panel">
       <div class="panel-heading">
         <span>{{ type === 'upload' ? '上传任务' : '下载任务' }}</span>
-        <n-button size="small" secondary :disabled="!visibleTasks.length" @click="tasksStore.clearTasks(type)">
-          清空日志
-        </n-button>
+        <n-space size="small">
+          <n-button
+            v-if="type === 'download'"
+            size="small"
+            secondary
+            :disabled="!settingsStore.hasToken"
+            :loading="syncingCloudTasks"
+            @click="() => refreshCloudTasks()"
+          >
+            刷新云下载状态
+          </n-button>
+          <n-button size="small" secondary :disabled="!visibleTasks.length" @click="tasksStore.clearTasks(type)">
+            清空日志
+          </n-button>
+        </n-space>
       </div>
       <TaskList
         :tasks="visibleTasks"
@@ -20,8 +32,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { NButton, useMessage } from 'naive-ui'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { NButton, NSpace, useMessage } from 'naive-ui'
 import TaskList from '@/components/TaskList.vue'
 import { fsApi } from '@/api/fs'
 import {
@@ -46,7 +58,32 @@ const tasksStore = useTasksStore()
 const settingsStore = useSettingsStore()
 const historyStore = useHistoryStore()
 const message = useMessage()
+const syncingCloudTasks = ref(false)
+let syncTimer: number | null = null
 const visibleTasks = computed(() => (props.type === 'upload' ? tasksStore.uploadTasks : tasksStore.downloadTasks))
+
+async function refreshCloudTasks(showMessage = true) {
+  if (props.type !== 'download' || syncingCloudTasks.value) return
+  syncingCloudTasks.value = true
+  try {
+    const ok = await syncOfflineDownloadTasks()
+    if (showMessage) message[ok ? 'success' : 'warning'](ok ? '云下载状态已刷新' : '未读取到云下载任务状态')
+  } catch (error) {
+    if (showMessage) message.error(error instanceof Error ? error.message : '云下载状态刷新失败')
+  } finally {
+    syncingCloudTasks.value = false
+  }
+}
+
+function restartCloudTaskTimer() {
+  if (syncTimer !== null) {
+    window.clearInterval(syncTimer)
+    syncTimer = null
+  }
+  if (props.type !== 'download' || !settingsStore.hasToken) return
+  refreshCloudTasks(false)
+  syncTimer = window.setInterval(() => refreshCloudTasks(false), 5000)
+}
 
 function openTaskFolder(path: string) {
   revealInFolder(path)
@@ -179,4 +216,10 @@ async function resumeDownloadTask(id: string) {
     message.error(error instanceof Error ? error.message : '下载失败')
   }
 }
+
+onMounted(restartCloudTaskTimer)
+watch(() => [props.type, settingsStore.hasToken] as const, restartCloudTaskTimer)
+onBeforeUnmount(() => {
+  if (syncTimer !== null) window.clearInterval(syncTimer)
+})
 </script>
