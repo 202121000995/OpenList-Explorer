@@ -1,7 +1,7 @@
 <template>
-  <div class="settings-view">
+  <div class="settings-view" :class="{ 'embedded-settings-view': embedded }">
     <section class="settings-section">
-      <div class="panel-heading">界面设置</div>
+      <div v-if="!embedded" class="panel-heading">界面设置</div>
       <n-form label-placement="left" label-width="120">
         <n-form-item label="主题">
           <n-radio-group v-model:value="settingsStore.theme">
@@ -49,6 +49,9 @@ import { useSettingsStore } from '@/stores/settings'
 import { defaultDownloadPath } from '@/services/localFile'
 
 const settingsStore = useSettingsStore()
+defineProps<{
+  embedded?: boolean
+}>()
 
 const languageOptions = [
   { label: '简体中文', value: 'zh-CN' },

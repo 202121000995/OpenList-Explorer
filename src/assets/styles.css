@@ -883,26 +883,33 @@ button {
 .shell-modal {
   width: min(980px, calc(100vw - 36px));
   max-height: calc(100vh - 48px);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
+  background: var(--app-elevated);
 }
 
 .shell-modal .n-card__content {
   min-height: 0;
   max-height: calc(100vh - 124px);
   overflow: hidden;
-  padding: 0;
+  padding: 12px;
+  background: var(--app-bg);
 }
 
 .task-shell-modal .task-view,
 .settings-shell-modal .settings-view {
   width: 100%;
   height: min(680px, calc(100vh - 124px));
-  padding: 16px;
+  padding: 0;
   overflow: auto;
 }
 
 .task-shell-modal .panel {
   height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .settings-shell-modal {
@@ -912,6 +919,34 @@ button {
 .settings-shell-modal .settings-section {
   border: 0;
   padding: 0;
+  background: transparent;
+}
+
+.embedded-task-view .panel-heading {
+  justify-content: flex-end;
+  min-height: 30px;
+  margin-bottom: 8px;
+}
+
+.embedded-task-view .task-table {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-elevated);
+}
+
+.embedded-task-view .task-table .n-data-table-th {
+  height: 38px;
+  background: color-mix(in srgb, var(--app-subtle) 86%, transparent);
+}
+
+.embedded-task-view .task-table .n-data-table-td {
+  height: 42px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.embedded-settings-view .settings-note {
+  margin-left: 120px;
 }
 
 .raw-url-qr {
@@ -1290,8 +1325,8 @@ button {
 }
 
 .task-actions .n-button {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 .secret-row {

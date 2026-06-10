@@ -160,8 +160,8 @@
       <div class="aria2-panels">
         <div class="aria2-panel">
           <div class="aria2-panel-title">本机 Aria2 RPC</div>
-          <n-alert type="success" class="settings-alert">
-            安装包已随带 aria2c。这里负责一键启动本机 RPC 服务。
+          <n-alert :type="aria2Status?.running ? 'success' : 'info'" class="settings-alert">
+            {{ aria2LocalHint }}
           </n-alert>
           <n-form label-placement="left" label-width="108" class="openlist-form aria2-config-form">
             <n-form-item label="自动启动">
@@ -178,9 +178,6 @@
                 placeholder="留空则不设置 RPC 密钥"
               />
             </n-form-item>
-            <n-form-item label="下载目录" class="aria2-wide-field">
-              <n-input v-model:value="settingsStore.aria2DownloadDir" placeholder="留空则使用系统下载目录" />
-            </n-form-item>
             <n-form-item label="并发任务">
               <n-input-number v-model:value="settingsStore.aria2MaxConcurrent" :min="1" :max="32" />
             </n-form-item>
@@ -190,13 +187,13 @@
           </n-form>
           <n-descriptions :column="1" size="small" bordered>
             <n-descriptions-item label="随包 Aria2">{{ aria2Status?.available ? '已包含' : '未包含' }}</n-descriptions-item>
-            <n-descriptions-item label="RPC 状态">{{ aria2Status?.running ? '已运行' : '未运行' }}</n-descriptions-item>
+            <n-descriptions-item label="连接状态">{{ aria2ConnectionText }}</n-descriptions-item>
             <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</n-descriptions-item>
-            <n-descriptions-item label="下载目录">{{ aria2Status?.download_dir || settingsStore.aria2DownloadDir || '系统下载目录' }}</n-descriptions-item>
+            <n-descriptions-item label="下载目录">{{ effectiveAria2DownloadDir }}</n-descriptions-item>
           </n-descriptions>
           <n-space justify="end" class="section-actions">
             <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新状态</n-button>
-            <n-button type="primary" :loading="startingAria2" @click="startAria2Rpc">一键启动 Aria2</n-button>
+            <n-button type="primary" :loading="startingAria2" @click="startAria2Rpc">一键连接 Aria2</n-button>
           </n-space>
         </div>
 
@@ -212,6 +209,7 @@
             <n-descriptions-item label="OpenList Aria2">{{ openListAria2Text }}</n-descriptions-item>
             <n-descriptions-item label="配置端口">{{ settingsStore.aria2RpcPort }}</n-descriptions-item>
             <n-descriptions-item label="配置密钥">{{ settingsStore.aria2RpcSecret ? '已设置' : '未设置' }}</n-descriptions-item>
+            <n-descriptions-item label="下载目录">{{ effectiveAria2DownloadDir }}</n-descriptions-item>
           </n-descriptions>
           <n-space justify="end" class="section-actions">
             <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新工具</n-button>
@@ -364,6 +362,19 @@ const openListAria2Text = computed(() => {
   return '未检测到云下载工具'
 })
 const openListAria2Enabled = computed(() => offlineTools.value.some((tool) => /aria2/i.test(tool)))
+const aria2ConnectionText = computed(() => {
+  if (aria2Status.value?.running) return '本机已连接'
+  if (aria2Status.value?.available) return '未连接'
+  return '未找到 aria2c'
+})
+const effectiveAria2DownloadDir = computed(() => {
+  return aria2Status.value?.download_dir || settingsStore.downloadDir || '系统下载目录'
+})
+const aria2LocalHint = computed(() => {
+  if (aria2Status.value?.running) return '本机 Aria2 已连接。Explorer 会用软件设置里的下载目录启动它。'
+  if (aria2Status.value?.available) return '点击“一键连接 Aria2”即可启动随安装包提供的本机 RPC 服务。'
+  return '当前安装包未找到 aria2c，无法启动本机 Aria2 RPC。'
+})
 
 function instanceStatusLabel(status?: string) {
   if (status === 'online') return '在线'
@@ -493,11 +504,11 @@ async function startAria2Rpc() {
     aria2Status.value = await startLocalAria2({
       rpcPort: settingsStore.aria2RpcPort,
       rpcSecret: settingsStore.aria2RpcSecret,
-      downloadDir: settingsStore.aria2DownloadDir,
+      downloadDir: settingsStore.downloadDir,
       maxConcurrent: settingsStore.aria2MaxConcurrent,
       split: settingsStore.aria2Split
     })
-    message.success(aria2Status.value.message)
+    message.success('Aria2 已启动并连接')
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'Aria2 启动失败')
   } finally {
@@ -510,7 +521,7 @@ async function copyAria2OpenListConfig() {
     `RPC 地址：http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`,
     `RPC 端口：${settingsStore.aria2RpcPort}`,
     `RPC 密钥：${settingsStore.aria2RpcSecret || '未设置'}`,
-    `下载目录：${settingsStore.aria2DownloadDir || '系统下载目录'}`
+    `下载目录：${settingsStore.downloadDir || '系统下载目录'}`
   ]
   await copyText(lines.join('\n'), 'Aria2 配置已复制')
 }

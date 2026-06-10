@@ -1,8 +1,8 @@
 <template>
-  <div class="task-view">
+  <div class="task-view" :class="{ 'embedded-task-view': embedded }">
     <div class="panel">
       <div class="panel-heading">
-        <span>{{ type === 'upload' ? '上传任务' : '下载任务' }}</span>
+        <span v-if="!embedded">{{ type === 'upload' ? '上传任务' : '下载任务' }}</span>
         <n-space size="small">
           <n-button
             v-if="type === 'download'"
@@ -80,6 +80,7 @@ import { taskStageLabel } from '@/models/task'
 
 const props = defineProps<{
   type: 'upload' | 'download'
+  embedded?: boolean
 }>()
 
 const tasksStore = useTasksStore()

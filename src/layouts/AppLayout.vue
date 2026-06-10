@@ -66,7 +66,7 @@
         closable
         @close="showTaskModal = false"
       >
-        <TasksView :type="taskModalType" />
+        <TasksView :type="taskModalType" embedded />
       </n-card>
     </n-modal>
 
@@ -79,7 +79,7 @@
         closable
         @close="showSettingsModal = false"
       >
-        <SettingsView />
+        <SettingsView embedded />
       </n-card>
     </n-modal>
 

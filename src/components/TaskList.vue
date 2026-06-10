@@ -5,8 +5,8 @@
     :data="tasks"
     :bordered="false"
     :single-line="false"
-    :pagination="{ pageSize: 12 }"
-    :scroll-x="1160"
+    :pagination="{ pageSize: 8 }"
+    :scroll-x="900"
   />
 </template>
 
@@ -31,42 +31,36 @@ const emit = defineEmits<{
 }>()
 
 const columns = computed<DataTableColumns<TransferTask>>(() => [
-  { title: '名称', key: 'name', minWidth: 190, ellipsis: { tooltip: true } },
-  { title: '路径', key: 'path', minWidth: 220, ellipsis: { tooltip: true } },
+  { title: '名称', key: 'name', minWidth: 160, ellipsis: { tooltip: true } },
+  { title: '路径', key: 'path', minWidth: 200, ellipsis: { tooltip: true } },
   {
     title: '详情',
     key: 'message',
-    minWidth: 180,
+    minWidth: 170,
     ellipsis: { tooltip: true },
     render(row) {
+      const stage = row.stage ? taskStageLabel[row.stage] : ''
+      const text = [stage, row.message].filter(Boolean).join(' · ') || '-'
       return h(
         NButton,
-        { text: true, size: 'tiny', disabled: !row.message, onClick: () => emit('detail', row.id) },
-        { default: () => row.message || '-' }
+        { text: true, size: 'tiny', disabled: text === '-', onClick: () => emit('detail', row.id) },
+        { default: () => text }
       )
     }
   },
   {
     title: '状态',
     key: 'status',
-    width: 96,
+    width: 88,
     render(row) {
       const type = row.status === 'success' ? 'success' : row.status === 'failed' ? 'error' : 'default'
       return h(NTag, { type, size: 'small' }, { default: () => taskStatusLabel[row.status] })
     }
   },
   {
-    title: '阶段',
-    key: 'stage',
-    width: 116,
-    render(row) {
-      return row.stage ? taskStageLabel[row.stage] : '-'
-    }
-  },
-  {
     title: '进度',
     key: 'progress',
-    width: 150,
+    width: 132,
     render(row) {
       return h(NProgress, { percentage: row.progress, height: 8, processing: row.status === 'running' })
     }
@@ -74,7 +68,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '速度',
     key: 'speed',
-    width: 104,
+    width: 92,
     render(row) {
       return row.speed ? `${formatBytes(row.speed)}/s` : '-'
     }
@@ -82,7 +76,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '',
     key: 'actions',
-    width: 150,
+    width: 136,
     fixed: 'right',
     align: 'right',
     render(row) {
