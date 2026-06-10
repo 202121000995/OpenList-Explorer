@@ -27,6 +27,7 @@ const emit = defineEmits<{
   cancel: [id: string]
   remove: [id: string]
   reveal: [path: string]
+  detail: [id: string]
 }>()
 
 const columns = computed<DataTableColumns<TransferTask>>(() => [
@@ -38,7 +39,11 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
     minWidth: 180,
     ellipsis: { tooltip: true },
     render(row) {
-      return row.message || '-'
+      return h(
+        NButton,
+        { text: true, size: 'tiny', disabled: !row.message, onClick: () => emit('detail', row.id) },
+        { default: () => row.message || '-' }
+      )
     }
   },
   {
@@ -80,6 +85,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
         ? ['paused', 'failed', 'canceled'].includes(row.status)
         : cloudTask && ['failed', 'canceled'].includes(row.status)
       const canCancel = ['waiting', 'running', 'paused'].includes(row.status) && (localControllable || cloudTask)
+      const resumeTitle = cloudTask ? '重试' : row.type === 'upload' && ['failed', 'canceled'].includes(row.status) ? '重新上传' : '继续'
       return h(NSpace, { class: 'task-actions', justify: 'end', size: 4, wrap: false }, () => [
         h(
           NButton,
@@ -100,7 +106,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
         ),
         h(
           NButton,
-          { circle: true, size: 'small', secondary: true, title: cloudTask ? '重试' : '继续', disabled: !canResume, onClick: () => emit('resume', row.id) },
+          { circle: true, size: 'small', secondary: true, title: resumeTitle, disabled: !canResume, onClick: () => emit('resume', row.id) },
           { icon: () => h(Play, { size: 15 }) }
         ),
         h(

@@ -198,6 +198,7 @@
       </n-descriptions>
       <n-space justify="end" class="section-actions">
         <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新云下载状态</n-button>
+        <n-button @click="copyAria2OpenListConfig">复制 OpenList 配置</n-button>
         <n-button :loading="startingAria2" @click="startAria2Rpc">启动 Aria2 RPC</n-button>
         <n-button @click="openBuiltinAdmin">打开 OpenList 管理端</n-button>
       </n-space>
@@ -456,6 +457,16 @@ async function startAria2Rpc() {
   } finally {
     startingAria2.value = false
   }
+}
+
+async function copyAria2OpenListConfig() {
+  const lines = [
+    `RPC 地址：http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`,
+    `RPC 端口：${settingsStore.aria2RpcPort}`,
+    `RPC 密钥：${settingsStore.aria2RpcSecret || '未设置'}`,
+    `下载目录：${settingsStore.aria2DownloadDir || '系统下载目录'}`
+  ]
+  await copyText(lines.join('\n'), 'Aria2 配置已复制')
 }
 
 async function useBuiltinOpenList() {

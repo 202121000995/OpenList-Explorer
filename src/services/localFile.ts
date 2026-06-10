@@ -10,6 +10,13 @@ export interface LocalUploadSelection {
   size: number
 }
 
+export interface UrlProbeResult {
+  ok: boolean
+  status: number
+  contentType?: string
+  contentLength?: number
+}
+
 export async function defaultDownloadPath() {
   return invoke<string>('default_download_path')
 }
@@ -78,4 +85,8 @@ export async function cancelTransferTask(id: string) {
 
 export async function revealInFolder(path: string) {
   return invoke('reveal_in_folder', { path })
+}
+
+export async function probeUrl(url: string) {
+  return invoke<UrlProbeResult>('probe_url', { url })
 }

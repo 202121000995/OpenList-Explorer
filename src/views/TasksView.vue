@@ -26,8 +26,30 @@
         @cancel="cancelTask"
         @remove="removeTask"
         @reveal="openTaskFolder"
+        @detail="openTaskDetail"
       />
     </div>
+
+    <n-modal v-model:show="detailDialog">
+      <n-card class="modal-card task-detail-card" title="任务详情" role="dialog" aria-modal="true">
+        <n-descriptions v-if="detailTask" :column="1" size="small" bordered>
+          <n-descriptions-item label="名称">{{ detailTask.name }}</n-descriptions-item>
+          <n-descriptions-item label="类型">{{ detailTask.type === 'upload' ? '上传' : '下载' }}</n-descriptions-item>
+          <n-descriptions-item label="来源">{{ detailTask.source === 'openlist-offline' ? 'OpenList 云下载' : '本地传输' }}</n-descriptions-item>
+          <n-descriptions-item label="状态">{{ detailTask.status }}</n-descriptions-item>
+          <n-descriptions-item label="进度">{{ detailTask.progress }}%</n-descriptions-item>
+          <n-descriptions-item label="路径">{{ detailTask.path }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.localPath" label="本地路径">{{ detailTask.localPath }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailTask.remoteId" label="远程任务 ID">{{ detailTask.remoteId }}</n-descriptions-item>
+          <n-descriptions-item label="详情">{{ detailTask.message || '-' }}</n-descriptions-item>
+        </n-descriptions>
+        <template #footer>
+          <n-space justify="end">
+            <n-button @click="detailDialog = false">关闭</n-button>
+          </n-space>
+        </template>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
@@ -59,8 +81,11 @@ const settingsStore = useSettingsStore()
 const historyStore = useHistoryStore()
 const message = useMessage()
 const syncingCloudTasks = ref(false)
+const detailDialog = ref(false)
+const detailTaskId = ref('')
 let syncTimer: number | null = null
 const visibleTasks = computed(() => (props.type === 'upload' ? tasksStore.uploadTasks : tasksStore.downloadTasks))
+const detailTask = computed(() => tasksStore.taskById(detailTaskId.value))
 
 async function refreshCloudTasks(showMessage = true) {
   if (props.type !== 'download' || syncingCloudTasks.value) return
@@ -87,6 +112,11 @@ function restartCloudTaskTimer() {
 
 function openTaskFolder(path: string) {
   revealInFolder(path)
+}
+
+function openTaskDetail(id: string) {
+  detailTaskId.value = id
+  detailDialog.value = true
 }
 
 async function pauseTask(id: string) {

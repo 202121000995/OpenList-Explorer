@@ -210,6 +210,15 @@
                 <n-button size="small" secondary @click="loadTransferFolders(dirname(destinationPath) || '/')">上一级</n-button>
                 <n-button size="small" secondary :loading="transferFoldersLoading" @click="loadTransferFolders(destinationPath)">刷新</n-button>
               </div>
+              <div class="directory-tree-shell">
+                <n-tree
+                  block-line
+                  :data="transferTreeData"
+                  :selected-keys="[destinationPath]"
+                  :on-load="loadTransferTreeNode"
+                  @update:selected-keys="handleTransferTreeSelect"
+                />
+              </div>
               <div v-if="transferFoldersLoading" class="directory-picker-state">正在读取目录...</div>
               <div v-else-if="!transferFolders.length" class="directory-picker-state">当前目录没有子文件夹</div>
               <template v-else>
@@ -277,10 +286,21 @@
                 <n-button size="tiny" secondary @click="copyText(propertiesRawUrl, '直链已复制')">复制</n-button>
               </span>
             </n-descriptions-item>
+            <n-descriptions-item v-if="propertiesProbeText" label="直链校验">
+              {{ propertiesProbeText }}
+            </n-descriptions-item>
+            <n-descriptions-item v-if="propertiesQrDataUrl" label="二维码">
+              <img class="raw-url-qr" :src="propertiesQrDataUrl" alt="直链二维码" />
+            </n-descriptions-item>
             <n-descriptions-item v-else-if="propertiesLoading" label="直链">正在获取...</n-descriptions-item>
           </n-descriptions>
           <template #footer>
-            <n-space justify="end">
+            <n-space justify="space-between">
+              <n-space>
+                <n-button :disabled="!propertiesRawUrl" @click="openPropertiesRawUrl">打开直链</n-button>
+                <n-button :disabled="!propertiesRawUrl" :loading="propertiesProbeLoading" @click="probePropertiesRawUrl">校验直链</n-button>
+                <n-button :disabled="!propertiesRawUrl" :loading="propertiesQrLoading" @click="generatePropertiesQr">生成二维码</n-button>
+              </n-space>
               <n-button @click="propertiesDialog = false">关闭</n-button>
             </n-space>
           </template>
@@ -292,6 +312,7 @@
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { UnlistenFn } from '@tauri-apps/api/event'
@@ -302,7 +323,8 @@ import {
   useDialog,
   useMessage,
   type DataTableColumns,
-  type DropdownOption
+  type DropdownOption,
+  type TreeOption
 } from 'naive-ui'
 import type { Component } from 'vue'
 import {
@@ -346,6 +368,7 @@ import { useTasksStore } from '@/stores/tasks'
 import {
   downloadWithEngine,
   expandUploadPaths,
+  probeUrl,
   selectUploadFiles,
   uploadWithEngine,
   type LocalUploadSelection
@@ -390,6 +413,7 @@ const folderName = ref('')
 const renameValue = ref('')
 const destinationPath = ref('')
 const transferFolders = ref<Array<{ name: string; path: string }>>([])
+const transferTreeData = ref<TreeOption[]>([])
 const transferFoldersLoading = ref(false)
 const cloudUrls = ref('')
 const cloudTool = ref('SimpleHttp')
@@ -401,6 +425,10 @@ const propertiesDialog = ref(false)
 const propertiesFile = ref<ExplorerFileItem | null>(null)
 const propertiesRawUrl = ref('')
 const propertiesLoading = ref(false)
+const propertiesProbeLoading = ref(false)
+const propertiesProbeText = ref('')
+const propertiesQrLoading = ref(false)
+const propertiesQrDataUrl = ref('')
 let unlistenDragDrop: UnlistenFn | null = null
 
 function delay(ms: number) {
@@ -826,6 +854,8 @@ function openMkdir() {
 async function openProperties(file: ExplorerFileItem) {
   propertiesFile.value = file
   propertiesRawUrl.value = ''
+  propertiesProbeText.value = ''
+  propertiesQrDataUrl.value = ''
   propertiesDialog.value = true
   if (file.type === 'folder') return
 
@@ -836,6 +866,42 @@ async function openProperties(file: ExplorerFileItem) {
     message.error(error instanceof Error ? error.message : '直链获取失败')
   } finally {
     propertiesLoading.value = false
+  }
+}
+
+function openPropertiesRawUrl() {
+  if (propertiesRawUrl.value) window.open(propertiesRawUrl.value, '_blank')
+}
+
+async function probePropertiesRawUrl() {
+  if (!propertiesRawUrl.value) return
+  propertiesProbeLoading.value = true
+  propertiesProbeText.value = ''
+  try {
+    const result = await probeUrl(propertiesRawUrl.value)
+    const sizeText = result.contentLength ? `，大小 ${formatBytes(result.contentLength)}` : ''
+    const typeText = result.contentType ? `，类型 ${result.contentType}` : ''
+    propertiesProbeText.value = result.ok ? `可访问，HTTP ${result.status}${typeText}${sizeText}` : `不可访问，HTTP ${result.status}`
+  } catch (error) {
+    propertiesProbeText.value = error instanceof Error ? error.message : '直链校验失败'
+  } finally {
+    propertiesProbeLoading.value = false
+  }
+}
+
+async function generatePropertiesQr() {
+  if (!propertiesRawUrl.value) return
+  propertiesQrLoading.value = true
+  try {
+    propertiesQrDataUrl.value = await QRCode.toDataURL(propertiesRawUrl.value, {
+      margin: 1,
+      width: 180,
+      errorCorrectionLevel: 'M'
+    })
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '二维码生成失败')
+  } finally {
+    propertiesQrLoading.value = false
   }
 }
 
@@ -939,6 +1005,7 @@ function openTransfer(mode: TransferMode) {
   transferMode.value = mode
   destinationPath.value = filesStore.currentPath
   transferDialog.value = true
+  resetTransferTree()
   loadTransferFolders(destinationPath.value)
 }
 
@@ -957,6 +1024,38 @@ async function loadTransferFolders(path: string) {
   } finally {
     transferFoldersLoading.value = false
   }
+}
+
+function resetTransferTree() {
+  const storages = storageStore.storages.length
+    ? storageStore.storages
+    : storageStore.activeStorage
+      ? [storageStore.activeStorage]
+      : []
+  transferTreeData.value = storages.map((storage) => ({
+    label: storage.name,
+    key: storage.mountPath,
+    isLeaf: false
+  }))
+}
+
+async function loadTransferTreeNode(node: TreeOption) {
+  const path = String(node.key ?? '')
+  if (!path) return
+  const response = await fsApi.list({ path, page: 1, per_page: 500, refresh: false })
+  node.children = (response.content ?? [])
+    .filter((item) => item.is_dir)
+    .map((item) => ({
+      label: item.name,
+      key: joinPath(path, item.name),
+      isLeaf: false
+    }))
+}
+
+function handleTransferTreeSelect(keys: Array<string | number>) {
+  const key = keys[0]
+  if (key === undefined) return
+  loadTransferFolders(String(key))
 }
 
 async function submitTransfer() {

@@ -76,6 +76,15 @@ struct LocalDownloadResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct UrlProbeResult {
+    ok: bool,
+    status: u16,
+    content_type: Option<String>,
+    content_length: Option<u64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct LocalUploadSelection {
     path: String,
     relative_path: String,
@@ -1168,6 +1177,43 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn probe_url(url: String) -> Result<UrlProbeResult, String> {
+    let client = reqwest::Client::new();
+    let mut response = client
+        .head(&url)
+        .send()
+        .await
+        .map_err(|error| format!("直链探测失败: {error}"))?;
+
+    if response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED {
+        response = client
+            .get(&url)
+            .header("Range", "bytes=0-0")
+            .send()
+            .await
+            .map_err(|error| format!("直链探测失败: {error}"))?;
+    }
+
+    let status = response.status();
+    let headers = response.headers();
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    let content_length = headers
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+
+    Ok(UrlProbeResult {
+        ok: status.is_success(),
+        status: status.as_u16(),
+        content_type,
+        content_length,
+    })
+}
+
 #[cfg(windows)]
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -1477,7 +1523,8 @@ pub fn run() {
             pause_transfer_task,
             resume_transfer_task,
             cancel_transfer_task,
-            reveal_in_folder
+            reveal_in_folder,
+            probe_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenList Explorer");

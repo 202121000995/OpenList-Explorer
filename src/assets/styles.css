@@ -876,6 +876,19 @@ button {
   width: min(640px, 94vw);
 }
 
+.task-detail-card {
+  width: min(620px, 94vw);
+}
+
+.raw-url-qr {
+  display: block;
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .directory-picker {
   display: grid;
   gap: 6px;
@@ -885,6 +898,15 @@ button {
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: var(--app-subtle);
+}
+
+.directory-tree-shell {
+  max-height: 180px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-elevated);
 }
 
 .directory-picker-toolbar {
