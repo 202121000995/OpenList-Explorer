@@ -12,12 +12,14 @@ use std::{
 };
 use bytes::Bytes;
 use futures_util::stream;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use rusqlite::{params, Connection};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
 
 const OPENLIST_BINS: [&str; 2] = ["openlist.exe", "openlist-x86_64-pc-windows-msvc.exe"];
 const ARIA2_BINS: [&str; 2] = ["aria2c.exe", "aria2c-x86_64-pc-windows-msvc.exe"];
+const MANAGED_OPENLIST_EXE: &str = "openlist_explorer_builtin.exe";
+const MANAGED_ARIA2_EXE: &str = "aria2_explorer_builtin.exe";
 const BUILTIN_OPENLIST_PORT: u16 = 15244;
 const BUILTIN_OPENLIST_URL: &str = "http://127.0.0.1:15244";
 const CREDENTIAL_TARGET_PREFIX: &str = "OpenList Explorer:OpenList API Token:";
@@ -296,6 +298,52 @@ fn aria2_binary(app: &AppHandle) -> Option<PathBuf> {
         .or_else(find_aria2_in_path)
 }
 
+fn managed_sidecar_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法获取应用数据目录: {error}"))?
+        .join("sidecars");
+    fs::create_dir_all(&dir).map_err(|error| format!("无法创建内置组件目录: {error}"))?;
+    Ok(dir)
+}
+
+fn managed_sidecar_binary(app: &AppHandle, source: &Path, managed_name: &str) -> Result<PathBuf, String> {
+    let target = managed_sidecar_dir(app)?.join(managed_name);
+    if !target.exists() {
+        fs::copy(source, &target).map_err(|error| format!("无法释放内置组件 {managed_name}: {error}"))?;
+    }
+    Ok(target)
+}
+
+fn managed_openlist_binary(app: &AppHandle) -> Result<PathBuf, String> {
+    let source = openlist_binary(app).ok_or_else(|| "安装包中未找到内置 OpenList".to_string())?;
+    managed_sidecar_binary(app, &source, MANAGED_OPENLIST_EXE)
+}
+
+fn managed_aria2_binary(app: &AppHandle) -> Option<PathBuf> {
+    let source = aria2_binary(app)?;
+    if source.file_name().and_then(|name| name.to_str()) == Some(MANAGED_ARIA2_EXE) {
+        return Some(source);
+    }
+    managed_sidecar_binary(app, &source, MANAGED_ARIA2_EXE).ok()
+}
+
+#[cfg(windows)]
+fn stop_managed_process(image_name: &str) {
+    let _ = hidden_program("taskkill.exe")
+        .args(["/IM", image_name, "/F", "/T"])
+        .output();
+}
+
+#[cfg(not(windows))]
+fn stop_managed_process(_image_name: &str) {}
+
+fn stop_managed_sidecars() {
+    stop_managed_process(MANAGED_OPENLIST_EXE);
+    stop_managed_process(MANAGED_ARIA2_EXE);
+}
+
 #[cfg(windows)]
 fn find_aria2_in_path() -> Option<PathBuf> {
     let output = hidden_program("where.exe").arg("aria2c.exe").output().ok()?;
@@ -416,11 +464,7 @@ fn parse_admin_password(output: &str) -> Option<String> {
     })
 }
 
-fn ensure_builtin_admin_password(binary: &PathBuf, data_dir: &PathBuf) -> Result<String, String> {
-    if let Some(password) = read_openlist_token(BUILTIN_ADMIN_PASSWORD_ID.to_string())? {
-        return Ok(password);
-    }
-
+fn reset_builtin_admin_password(binary: &PathBuf, data_dir: &PathBuf) -> Result<String, String> {
     let output = hidden_command(binary)
         .args(["admin", "random", "--data"])
         .arg(data_dir)
@@ -1437,7 +1481,7 @@ fn builtin_openlist_status(app: AppHandle) -> Result<BuiltinOpenListStatus, Stri
 
 #[tauri::command]
 fn local_aria2_status(app: AppHandle, rpc_port: Option<u16>) -> Result<LocalAria2Status, String> {
-    let binary = aria2_binary(&app);
+    let binary = managed_aria2_binary(&app).or_else(|| aria2_binary(&app));
     let port = rpc_port.unwrap_or(6800);
     let running = is_local_port_open(port);
 
@@ -1469,7 +1513,7 @@ fn start_local_aria2(
     max_concurrent: Option<u16>,
     split: Option<u16>,
 ) -> Result<LocalAria2Status, String> {
-    let binary = aria2_binary(&app).ok_or_else(|| {
+    let binary = managed_aria2_binary(&app).ok_or_else(|| {
         "未找到 aria2c.exe。请把 aria2c.exe 放到安装目录、安装目录的 binaries 子目录，或加入系统 PATH。".to_string()
     })?;
     let port = if rpc_port == 0 { 6800 } else { rpc_port };
@@ -1528,7 +1572,7 @@ fn start_local_aria2(
 
 #[tauri::command]
 fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, String> {
-    let binary = openlist_binary(&app).ok_or_else(|| "安装包中未找到内置 OpenList".to_string())?;
+    let binary = managed_openlist_binary(&app)?;
     let data_dir = app_data_dir(&app)?;
     ensure_builtin_openlist_config(&binary, &data_dir)?;
 
@@ -1552,7 +1596,7 @@ fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, Stri
     }
 
     let token = read_admin_token(&binary, &data_dir)?;
-    let admin_password = ensure_builtin_admin_password(&binary, &data_dir)?;
+    let admin_password = reset_builtin_admin_password(&binary, &data_dir)?;
 
     Ok(BuiltinOpenListSession {
         server_url: BUILTIN_OPENLIST_URL.to_string(),
@@ -1563,14 +1607,58 @@ fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, Stri
     })
 }
 
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return Err("只能打开 http:// 或 https:// 地址".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        let status = hidden_program("cmd.exe")
+            .args(["/C", "start", "", trimmed])
+            .status()
+            .map_err(|error| format!("无法打开系统浏览器: {error}"))?;
+        if !status.success() {
+            return Err("系统浏览器打开失败".to_string());
+        }
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|error| format!("无法打开系统浏览器: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|error| format!("无法打开系统浏览器: {error}"))?;
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_window_event(|_window, event| {
+            if matches!(event, WindowEvent::CloseRequested { .. }) {
+                stop_managed_sidecars();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             builtin_openlist_status,
             local_aria2_status,
             start_local_aria2,
             start_builtin_openlist,
+            open_external_url,
             save_openlist_token,
             read_openlist_token,
             clear_openlist_token,

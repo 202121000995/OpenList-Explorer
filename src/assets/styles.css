@@ -881,25 +881,36 @@ button {
 }
 
 .shell-modal {
-  width: min(980px, calc(100vw - 36px));
+  width: min(920px, calc(100vw - 36px));
   max-height: calc(100vh - 48px);
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: var(--app-elevated);
 }
 
+.shell-modal .n-card-header {
+  min-height: 48px;
+  padding: 12px 18px 8px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.shell-modal .n-card-header__main {
+  font-size: 18px;
+  font-weight: 760;
+}
+
 .shell-modal .n-card__content {
   min-height: 0;
-  max-height: calc(100vh - 124px);
+  max-height: calc(100vh - 96px);
   overflow: hidden;
-  padding: 12px;
+  padding: 10px 12px 12px;
   background: var(--app-bg);
 }
 
 .task-shell-modal .task-view,
 .settings-shell-modal .settings-view {
   width: 100%;
-  height: min(680px, calc(100vh - 124px));
+  height: min(520px, calc(100vh - 108px));
   padding: 0;
   overflow: auto;
 }
@@ -924,7 +935,7 @@ button {
 
 .embedded-task-view .panel-heading {
   justify-content: flex-end;
-  min-height: 30px;
+  min-height: 28px;
   margin-bottom: 8px;
 }
 
@@ -940,13 +951,18 @@ button {
 }
 
 .embedded-task-view .task-table .n-data-table-td {
-  height: 42px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  height: 40px;
+  padding-top: 3px;
+  padding-bottom: 3px;
 }
 
 .embedded-settings-view .settings-note {
   margin-left: 120px;
+}
+
+.compact-alert {
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .raw-url-qr {

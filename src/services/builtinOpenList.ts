@@ -50,3 +50,7 @@ export async function startLocalAria2(payload: StartAria2Payload) {
 export async function startBuiltinOpenList() {
   return invoke<BuiltinOpenListSession>('start_builtin_openlist')
 }
+
+export async function openExternalUrl(url: string) {
+  return invoke<void>('open_external_url', { url })
+}

@@ -89,18 +89,21 @@
               <n-descriptions-item label="运行状态">{{ builtinStatus?.running ? '已运行' : '未运行' }}</n-descriptions-item>
               <n-descriptions-item label="内置程序">{{ builtinStatus?.available ? '已包含' : '未找到' }}</n-descriptions-item>
               <n-descriptions-item v-if="builtinStatus?.data_dir" label="数据目录">{{ builtinStatus.data_dir }}</n-descriptions-item>
-              <n-descriptions-item v-if="builtinAdminPassword" label="Web 管理账号">admin</n-descriptions-item>
-              <n-descriptions-item v-if="builtinAdminPassword" label="Web 管理密码">
+              <n-descriptions-item v-if="builtinAdminPassword" label="网页登录账号">admin</n-descriptions-item>
+              <n-descriptions-item v-if="builtinAdminPassword" label="网页登录密码">
                 <span class="secret-row">
                   <span>{{ builtinAdminPassword }}</span>
                   <n-button size="tiny" secondary @click="copyBuiltinAdminPassword">复制</n-button>
                 </span>
               </n-descriptions-item>
             </n-descriptions>
+            <n-alert v-if="builtinAdminPassword" type="success" class="settings-alert compact-alert">
+              上面显示的是 OpenList 网页管理端登录密码，不是 API Token。
+            </n-alert>
             <n-space justify="end" class="section-actions">
               <n-button :loading="loadingBuiltin" @click="refreshBuiltinStatus()">刷新状态</n-button>
-              <n-button v-if="builtinAdminPassword" secondary @click="copyBuiltinAdminPassword">复制管理密码</n-button>
-              <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('builtin')">打开管理端</n-button>
+              <n-button v-if="builtinAdminPassword" secondary @click="copyBuiltinAdminPassword">复制网页登录密码</n-button>
+              <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('builtin')">用浏览器打开管理端</n-button>
               <n-button type="primary" :loading="loadingBuiltin" @click="useBuiltinOpenList">启动并连接</n-button>
             </n-space>
           </div>
@@ -214,32 +217,11 @@
           <n-space justify="end" class="section-actions">
             <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新工具</n-button>
             <n-button @click="copyAria2OpenListConfig">复制配置</n-button>
-            <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('current')">打开管理端</n-button>
+            <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('current')">用浏览器打开管理端</n-button>
           </n-space>
         </div>
       </div>
     </section>
-
-    <n-modal v-model:show="showAdminModal" display-directive="show">
-      <n-card
-        class="admin-browser-card"
-        :title="adminModalTitle"
-        role="dialog"
-        aria-modal="true"
-        closable
-        @close="showAdminModal = false"
-      >
-        <div class="admin-login-strip">
-          <span>地址：{{ adminFrameUrl }}</span>
-          <span v-if="adminLoginUsername">账号：{{ adminLoginUsername }}</span>
-          <span v-if="adminLoginPassword" class="secret-row">
-            密码：<strong>{{ adminLoginPassword }}</strong>
-            <n-button size="tiny" secondary @click="copyAdminModalPassword">复制密码</n-button>
-          </span>
-        </div>
-        <iframe v-if="adminFrameUrl" class="admin-browser-frame" :src="adminFrameUrl" />
-      </n-card>
-    </n-modal>
   </div>
 </template>
 
@@ -254,6 +236,7 @@ import { useClipboardAction } from '@/hooks/useClipboard'
 import {
   getBuiltinOpenListStatus,
   getLocalAria2Status,
+  openExternalUrl,
   startLocalAria2,
   startBuiltinOpenList,
   type BuiltinOpenListStatus,
@@ -285,11 +268,6 @@ const offlineTools = ref<string[]>([])
 const loadingCloudTools = ref(false)
 const startingAria2 = ref(false)
 const openingAdmin = ref(false)
-const showAdminModal = ref(false)
-const adminFrameUrl = ref('')
-const adminModalTitle = ref('OpenList 管理端')
-const adminLoginUsername = ref('')
-const adminLoginPassword = ref('')
 
 async function switchInstance(id: string) {
   await settingsStore.switchInstance(id)
@@ -559,15 +537,19 @@ async function openOpenListAdmin(target: 'builtin' | 'current') {
   try {
     const shouldStartBuiltin = target === 'builtin' || settingsStore.activeInstance?.isBuiltin
     let url = settingsStore.serverUrl || 'http://127.0.0.1:15244'
-    adminLoginUsername.value = settingsStore.username || ''
-    adminLoginPassword.value = ''
 
     if (shouldStartBuiltin) {
       const session = await startBuiltinOpenList()
       builtinAdminPassword.value = session.admin_password
       url = session.server_url
-      adminLoginUsername.value = session.admin_username || 'admin'
-      adminLoginPassword.value = session.admin_password
+      settingsStore.serverUrl = session.server_url
+      settingsStore.updateInstance(settingsStore.activeInstanceId, {
+        name: '本机 OpenList',
+        serverUrl: session.server_url,
+        username: 'admin',
+        isBuiltin: true
+      })
+      await settingsStore.updateToken(session.token)
       builtinStatus.value = {
         available: true,
         running: true,
@@ -575,11 +557,11 @@ async function openOpenListAdmin(target: 'builtin' | 'current') {
         data_dir: session.data_dir,
         message: '内置 OpenList 已运行'
       }
+      await copyText(session.admin_password, '网页登录密码已复制')
+      message.success('网页登录密码已复制，请在浏览器中使用 admin 登录')
     }
 
-    adminFrameUrl.value = url
-    adminModalTitle.value = shouldStartBuiltin ? '内置 OpenList 管理端' : 'OpenList 管理端'
-    showAdminModal.value = true
+    await openExternalUrl(url)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '管理端打开失败')
   } finally {
@@ -592,12 +574,7 @@ async function copyBuiltinAdminPassword() {
     message.warning('请先启动并连接内置 OpenList')
     return
   }
-  await copyText(builtinAdminPassword.value, '管理密码已复制')
-}
-
-async function copyAdminModalPassword() {
-  if (!adminLoginPassword.value) return
-  await copyText(adminLoginPassword.value, '管理密码已复制')
+  await copyText(builtinAdminPassword.value, '网页登录密码已复制')
 }
 
 async function loginAndTest() {
