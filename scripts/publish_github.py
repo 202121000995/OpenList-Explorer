@@ -108,7 +108,7 @@ def should_include(path: Path) -> bool:
         return False
     if path.name in EXCLUDED_FILES:
         return False
-    if path.suffix.lower() in {".exe", ".msi"}:
+    if path.suffix.lower() in {".exe", ".msi", ".log"}:
         return False
     if path.stat().st_size > 95 * 1024 * 1024:
         return False
@@ -219,6 +219,20 @@ def ensure_release(commit_sha: str):
         "- Source repository excludes the large OpenList binary sidecar because GitHub normal git storage has a 100MB file limit\n"
     )
     if release:
+        tag_ref = api_optional(f"repos/{OWNER}/{REPO}/git/ref/tags/{TAG}")
+        if tag_ref:
+            api(f"repos/{OWNER}/{REPO}/git/refs/tags/{TAG}", "PATCH", {"sha": commit_sha, "force": True})
+        api(
+            f"repos/{OWNER}/{REPO}/releases/{release['id']}",
+            "PATCH",
+            {
+                "target_commitish": commit_sha,
+                "name": f"OpenList Explorer {APP_VERSION}",
+                "body": body,
+                "draft": False,
+                "prerelease": True,
+            },
+        )
         return release
     return api(
         f"repos/{OWNER}/{REPO}/releases",
