@@ -11,9 +11,9 @@
           v-for="item in navItems"
           :key="item.name"
           class="titlebar-nav-item"
-          :class="{ active: route.name === item.name }"
+          :class="{ active: isNavActive(item.name) }"
           type="button"
-          @click="router.push({ name: item.name })"
+          @click="handleNavClick(item.name)"
         >
           <component :is="item.icon" :size="15" />
           <span>{{ item.label }}</span>
@@ -35,7 +35,7 @@
         </n-tooltip>
         <n-tooltip>
           <template #trigger>
-            <button class="chrome-button" type="button" @click="router.push({ name: 'settings' })">
+            <button class="chrome-button" type="button" @click="showSettingsModal = true">
               <Settings :size="16" />
             </button>
           </template>
@@ -56,6 +56,32 @@
     <main class="window-content">
       <RouterView />
     </main>
+
+    <n-modal v-model:show="showTaskModal" display-directive="show">
+      <n-card
+        class="shell-modal task-shell-modal"
+        :title="taskModalType === 'upload' ? '上传列表' : '下载列表'"
+        role="dialog"
+        aria-modal="true"
+        closable
+        @close="showTaskModal = false"
+      >
+        <TasksView :type="taskModalType" />
+      </n-card>
+    </n-modal>
+
+    <n-modal v-model:show="showSettingsModal" display-directive="show">
+      <n-card
+        class="shell-modal settings-shell-modal"
+        title="界面设置"
+        role="dialog"
+        aria-modal="true"
+        closable
+        @close="showSettingsModal = false"
+      >
+        <SettingsView />
+      </n-card>
+    </n-modal>
 
     <n-modal v-model:show="showOnboarding" :mask-closable="false">
       <n-card class="onboarding-modal" title="连接 OpenList" role="dialog" aria-modal="true">
@@ -85,6 +111,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { Cloud, Download, Files, Moon, Settings, Sun, Upload } from '@lucide/vue'
+import SettingsView from '@/views/SettingsView.vue'
+import TasksView from '@/views/TasksView.vue'
 import { useFilesStore } from '@/stores/files'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useHistoryStore } from '@/stores/history'
@@ -103,6 +131,9 @@ const tasksStore = useTasksStore()
 const favoritesStore = useFavoritesStore()
 const historyStore = useHistoryStore()
 const showOnboarding = ref(false)
+const showTaskModal = ref(false)
+const showSettingsModal = ref(false)
+const taskModalType = ref<'upload' | 'download'>('upload')
 let unlistenTransfer: UnlistenFn | null = null
 let offlineTaskTimer: number | null = null
 
@@ -119,6 +150,21 @@ const navItems = [
   { name: 'uploads', label: '上传列表', icon: Upload },
   { name: 'downloads', label: '下载列表', icon: Download }
 ]
+
+function isNavActive(name: string) {
+  if (name === 'uploads') return showTaskModal.value && taskModalType.value === 'upload'
+  if (name === 'downloads') return showTaskModal.value && taskModalType.value === 'download'
+  return route.name === name
+}
+
+async function handleNavClick(name: string) {
+  if (name === 'uploads' || name === 'downloads') {
+    taskModalType.value = name === 'uploads' ? 'upload' : 'download'
+    showTaskModal.value = true
+    return
+  }
+  await router.push({ name })
+}
 
 const connectionClass = computed(() => {
   if (settingsStore.hasToken && storageStore.hasStorages) return 'online'

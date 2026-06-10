@@ -85,7 +85,7 @@
               适合大多数用户。Explorer 会启动随安装包提供的 OpenList，并自动读取访问凭据。
             </n-alert>
             <n-descriptions :column="1" size="small" bordered>
-              <n-descriptions-item label="服务地址">{{ builtinStatus?.server_url ?? 'http://127.0.0.1:5244' }}</n-descriptions-item>
+              <n-descriptions-item label="服务地址">{{ builtinStatus?.server_url ?? 'http://127.0.0.1:15244' }}</n-descriptions-item>
               <n-descriptions-item label="运行状态">{{ builtinStatus?.running ? '已运行' : '未运行' }}</n-descriptions-item>
               <n-descriptions-item label="内置程序">{{ builtinStatus?.available ? '已包含' : '未找到' }}</n-descriptions-item>
               <n-descriptions-item v-if="builtinStatus?.data_dir" label="数据目录">{{ builtinStatus.data_dir }}</n-descriptions-item>
@@ -100,7 +100,7 @@
             <n-space justify="end" class="section-actions">
               <n-button :loading="loadingBuiltin" @click="refreshBuiltinStatus()">刷新状态</n-button>
               <n-button v-if="builtinAdminPassword" secondary @click="copyBuiltinAdminPassword">复制管理密码</n-button>
-              <n-button type="primary" ghost @click="openBuiltinAdmin">打开管理端</n-button>
+              <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('builtin')">打开管理端</n-button>
               <n-button type="primary" :loading="loadingBuiltin" @click="useBuiltinOpenList">启动并连接</n-button>
             </n-space>
           </div>
@@ -157,58 +157,91 @@
 
     <section class="settings-section">
       <div class="panel-heading">云下载 / Aria2</div>
-      <n-alert type="info" class="settings-alert">
-        云下载能力由 OpenList 提供。Explorer 会读取 OpenList 已启用的下载工具；如果 OpenList 没有启用 Aria2，这里会明确显示。
-      </n-alert>
-      <n-form label-placement="left" label-width="120" class="openlist-form aria2-config-form">
-        <n-form-item label="自动启动">
-          <n-switch v-model:value="settingsStore.aria2AutoStart" />
-        </n-form-item>
-        <n-form-item label="RPC 端口">
-          <n-input-number v-model:value="settingsStore.aria2RpcPort" :min="1024" :max="65535" />
-        </n-form-item>
-        <n-form-item label="RPC 密钥" class="aria2-wide-field">
-          <n-input
-            v-model:value="settingsStore.aria2RpcSecret"
-            type="password"
-            show-password-on="click"
-            placeholder="留空则不设置 RPC 密钥"
-          />
-        </n-form-item>
-        <n-form-item label="下载目录" class="aria2-wide-field">
-          <n-input v-model:value="settingsStore.aria2DownloadDir" placeholder="留空则使用系统下载目录" />
-        </n-form-item>
-        <n-form-item label="并发任务">
-          <n-input-number v-model:value="settingsStore.aria2MaxConcurrent" :min="1" :max="32" />
-        </n-form-item>
-        <n-form-item label="连接分片">
-          <n-input-number v-model:value="settingsStore.aria2Split" :min="1" :max="32" />
-        </n-form-item>
-      </n-form>
-      <n-descriptions :column="1" size="small" bordered>
-        <n-descriptions-item label="OpenList 云下载工具">
-          {{ offlineTools.length ? offlineTools.join(', ') : '未检测到' }}
-        </n-descriptions-item>
-        <n-descriptions-item label="OpenList Aria2">
-          {{ openListAria2Text }}
-        </n-descriptions-item>
-        <n-descriptions-item label="本机 Aria2 RPC">
-          {{ aria2Status?.running ? '已运行' : '未运行' }}
-        </n-descriptions-item>
-        <n-descriptions-item label="随包 Aria2">
-          {{ aria2Status?.available ? '已包含' : '未包含' }}
-        </n-descriptions-item>
-        <n-descriptions-item v-if="aria2Status?.binary_path" label="Aria2 程序">{{ aria2Status.binary_path }}</n-descriptions-item>
-        <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</n-descriptions-item>
-        <n-descriptions-item label="当前下载目录">{{ aria2Status?.download_dir || settingsStore.aria2DownloadDir || '系统下载目录' }}</n-descriptions-item>
-      </n-descriptions>
-      <n-space justify="end" class="section-actions">
-        <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新云下载状态</n-button>
-        <n-button @click="copyAria2OpenListConfig">复制 OpenList 配置</n-button>
-        <n-button :loading="startingAria2" @click="startAria2Rpc">启动 Aria2 RPC</n-button>
-        <n-button @click="openBuiltinAdmin">打开 OpenList 管理端</n-button>
-      </n-space>
+      <div class="aria2-panels">
+        <div class="aria2-panel">
+          <div class="aria2-panel-title">本机 Aria2 RPC</div>
+          <n-alert type="success" class="settings-alert">
+            安装包已随带 aria2c。这里负责一键启动本机 RPC 服务。
+          </n-alert>
+          <n-form label-placement="left" label-width="108" class="openlist-form aria2-config-form">
+            <n-form-item label="自动启动">
+              <n-switch v-model:value="settingsStore.aria2AutoStart" />
+            </n-form-item>
+            <n-form-item label="RPC 端口">
+              <n-input-number v-model:value="settingsStore.aria2RpcPort" :min="1024" :max="65535" />
+            </n-form-item>
+            <n-form-item label="RPC 密钥" class="aria2-wide-field">
+              <n-input
+                v-model:value="settingsStore.aria2RpcSecret"
+                type="password"
+                show-password-on="click"
+                placeholder="留空则不设置 RPC 密钥"
+              />
+            </n-form-item>
+            <n-form-item label="下载目录" class="aria2-wide-field">
+              <n-input v-model:value="settingsStore.aria2DownloadDir" placeholder="留空则使用系统下载目录" />
+            </n-form-item>
+            <n-form-item label="并发任务">
+              <n-input-number v-model:value="settingsStore.aria2MaxConcurrent" :min="1" :max="32" />
+            </n-form-item>
+            <n-form-item label="连接分片">
+              <n-input-number v-model:value="settingsStore.aria2Split" :min="1" :max="32" />
+            </n-form-item>
+          </n-form>
+          <n-descriptions :column="1" size="small" bordered>
+            <n-descriptions-item label="随包 Aria2">{{ aria2Status?.available ? '已包含' : '未包含' }}</n-descriptions-item>
+            <n-descriptions-item label="RPC 状态">{{ aria2Status?.running ? '已运行' : '未运行' }}</n-descriptions-item>
+            <n-descriptions-item label="RPC 地址">{{ aria2Status?.rpc_url ?? `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc` }}</n-descriptions-item>
+            <n-descriptions-item label="下载目录">{{ aria2Status?.download_dir || settingsStore.aria2DownloadDir || '系统下载目录' }}</n-descriptions-item>
+          </n-descriptions>
+          <n-space justify="end" class="section-actions">
+            <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新状态</n-button>
+            <n-button type="primary" :loading="startingAria2" @click="startAria2Rpc">一键启动 Aria2</n-button>
+          </n-space>
+        </div>
+
+        <div class="aria2-panel">
+          <div class="aria2-panel-title">OpenList 云下载工具</div>
+          <n-alert :type="openListAria2Enabled ? 'success' : 'warning'" class="settings-alert">
+            OpenList 需要在管理端启用 Aria2 后，云下载任务才会交给 Aria2 执行。
+          </n-alert>
+          <n-descriptions :column="1" size="small" bordered>
+            <n-descriptions-item label="云下载工具">
+              {{ offlineTools.length ? offlineTools.join(', ') : '未检测到' }}
+            </n-descriptions-item>
+            <n-descriptions-item label="OpenList Aria2">{{ openListAria2Text }}</n-descriptions-item>
+            <n-descriptions-item label="配置端口">{{ settingsStore.aria2RpcPort }}</n-descriptions-item>
+            <n-descriptions-item label="配置密钥">{{ settingsStore.aria2RpcSecret ? '已设置' : '未设置' }}</n-descriptions-item>
+          </n-descriptions>
+          <n-space justify="end" class="section-actions">
+            <n-button :loading="loadingCloudTools" @click="refreshCloudDownloadStatus()">刷新工具</n-button>
+            <n-button @click="copyAria2OpenListConfig">复制配置</n-button>
+            <n-button type="primary" ghost :loading="openingAdmin" @click="openOpenListAdmin('current')">打开管理端</n-button>
+          </n-space>
+        </div>
+      </div>
     </section>
+
+    <n-modal v-model:show="showAdminModal" display-directive="show">
+      <n-card
+        class="admin-browser-card"
+        :title="adminModalTitle"
+        role="dialog"
+        aria-modal="true"
+        closable
+        @close="showAdminModal = false"
+      >
+        <div class="admin-login-strip">
+          <span>地址：{{ adminFrameUrl }}</span>
+          <span v-if="adminLoginUsername">账号：{{ adminLoginUsername }}</span>
+          <span v-if="adminLoginPassword" class="secret-row">
+            密码：<strong>{{ adminLoginPassword }}</strong>
+            <n-button size="tiny" secondary @click="copyAdminModalPassword">复制密码</n-button>
+          </span>
+        </div>
+        <iframe v-if="adminFrameUrl" class="admin-browser-frame" :src="adminFrameUrl" />
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
@@ -253,6 +286,12 @@ const aria2Status = ref<LocalAria2Status | null>(null)
 const offlineTools = ref<string[]>([])
 const loadingCloudTools = ref(false)
 const startingAria2 = ref(false)
+const openingAdmin = ref(false)
+const showAdminModal = ref(false)
+const adminFrameUrl = ref('')
+const adminModalTitle = ref('OpenList 管理端')
+const adminLoginUsername = ref('')
+const adminLoginPassword = ref('')
 
 async function switchInstance(id: string) {
   await settingsStore.switchInstance(id)
@@ -324,6 +363,7 @@ const openListAria2Text = computed(() => {
   if (offlineTools.value.length) return '未启用'
   return '未检测到云下载工具'
 })
+const openListAria2Enabled = computed(() => offlineTools.value.some((tool) => /aria2/i.test(tool)))
 
 function instanceStatusLabel(status?: string) {
   if (status === 'online') return '在线'
@@ -405,7 +445,7 @@ async function refreshBuiltinStatus(showFeedback = true) {
     builtinStatus.value = {
       available: false,
       running: false,
-      server_url: 'http://127.0.0.1:5244',
+      server_url: 'http://127.0.0.1:15244',
       message: '当前环境不是 Tauri 桌面端，无法检测内置 OpenList。'
     }
     if (showFeedback) {
@@ -503,9 +543,37 @@ async function useBuiltinOpenList() {
   }
 }
 
-function openBuiltinAdmin() {
-  const url = builtinStatus.value?.server_url || settingsStore.serverUrl || 'http://127.0.0.1:5244'
-  window.open(url, '_blank')
+async function openOpenListAdmin(target: 'builtin' | 'current') {
+  openingAdmin.value = true
+  try {
+    const shouldStartBuiltin = target === 'builtin' || settingsStore.activeInstance?.isBuiltin
+    let url = settingsStore.serverUrl || 'http://127.0.0.1:15244'
+    adminLoginUsername.value = settingsStore.username || ''
+    adminLoginPassword.value = ''
+
+    if (shouldStartBuiltin) {
+      const session = await startBuiltinOpenList()
+      builtinAdminPassword.value = session.admin_password
+      url = session.server_url
+      adminLoginUsername.value = session.admin_username || 'admin'
+      adminLoginPassword.value = session.admin_password
+      builtinStatus.value = {
+        available: true,
+        running: true,
+        server_url: session.server_url,
+        data_dir: session.data_dir,
+        message: '内置 OpenList 已运行'
+      }
+    }
+
+    adminFrameUrl.value = url
+    adminModalTitle.value = shouldStartBuiltin ? '内置 OpenList 管理端' : 'OpenList 管理端'
+    showAdminModal.value = true
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '管理端打开失败')
+  } finally {
+    openingAdmin.value = false
+  }
 }
 
 async function copyBuiltinAdminPassword() {
@@ -514,6 +582,11 @@ async function copyBuiltinAdminPassword() {
     return
   }
   await copyText(builtinAdminPassword.value, '管理密码已复制')
+}
+
+async function copyAdminModalPassword() {
+  if (!adminLoginPassword.value) return
+  await copyText(adminLoginPassword.value, '管理密码已复制')
 }
 
 async function loginAndTest() {

@@ -63,11 +63,17 @@ def start_server():
 
 def screenshot(browser: str, url: str, output: Path, width: int):
     output.parent.mkdir(parents=True, exist_ok=True)
-    user_data_dir = OUTPUT / "browser-profile"
+    user_data_dir = OUTPUT / f"browser-profile-{output.stem}"
+    if user_data_dir.exists():
+        shutil.rmtree(user_data_dir, ignore_errors=True)
     command = [
         browser,
         "--headless=new",
         "--disable-gpu",
+        "--disable-gpu-compositing",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-features=UseSkiaRenderer,Vulkan,DefaultANGLEVulkan,UseDawn",
         "--hide-scrollbars",
         "--no-first-run",
         "--no-default-browser-check",
@@ -77,9 +83,19 @@ def screenshot(browser: str, url: str, output: Path, width: int):
         f"--screenshot={output}",
         url,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"browser exited {result.returncode}")
+        stderr = (result.stderr or "").strip()
+        stdout = (result.stdout or "").strip()
+        raise RuntimeError(stderr or stdout or f"browser exited {result.returncode}")
     if not output.exists() or output.stat().st_size < 2 * 1024:
         raise RuntimeError(f"screenshot is missing or too small: {output}")
 

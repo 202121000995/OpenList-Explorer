@@ -18,7 +18,8 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
 
 const OPENLIST_BINS: [&str; 2] = ["openlist.exe", "openlist-x86_64-pc-windows-msvc.exe"];
 const ARIA2_BINS: [&str; 2] = ["aria2c.exe", "aria2c-x86_64-pc-windows-msvc.exe"];
-const OPENLIST_URL: &str = "http://127.0.0.1:5244";
+const BUILTIN_OPENLIST_PORT: u16 = 15244;
+const BUILTIN_OPENLIST_URL: &str = "http://127.0.0.1:15244";
 const CREDENTIAL_TARGET_PREFIX: &str = "OpenList Explorer:OpenList API Token:";
 const LEGACY_CREDENTIAL_TARGET: &str = "OpenList Explorer:OpenList API Token";
 const CREDENTIAL_USER: &str = "OpenList Explorer";
@@ -154,7 +155,7 @@ fn transfers() -> &'static Mutex<HashMap<String, TransferControl>> {
 }
 
 fn is_port_open() -> bool {
-    is_local_port_open(5244)
+    is_local_port_open(BUILTIN_OPENLIST_PORT)
 }
 
 fn is_local_port_open(port: u16) -> bool {
@@ -360,6 +361,48 @@ fn read_admin_token(binary: &PathBuf, data_dir: &PathBuf) -> Result<String, Stri
         .filter(|token| !token.is_empty())
         .map(str::to_string)
         .ok_or_else(|| "未能从 OpenList 输出中读取 Token".to_string())
+}
+
+fn ensure_builtin_openlist_config(binary: &PathBuf, data_dir: &PathBuf) -> Result<(), String> {
+    fs::create_dir_all(data_dir).map_err(|error| format!("无法创建内置 OpenList 数据目录: {error}"))?;
+    let config_path = data_dir.join("config.json");
+
+    if !config_path.exists() {
+        let _ = hidden_command(binary)
+            .args(["admin", "token", "--data"])
+            .arg(data_dir)
+            .output()
+            .map_err(|error| format!("无法初始化内置 OpenList 配置: {error}"))?;
+    }
+
+    if !config_path.exists() {
+        return Err("内置 OpenList 配置初始化失败，未生成 config.json".to_string());
+    }
+
+    let config_text = fs::read_to_string(&config_path)
+        .map_err(|error| format!("无法读取内置 OpenList 配置: {error}"))?;
+    let mut config: serde_json::Value = serde_json::from_str(&config_text)
+        .map_err(|error| format!("无法解析内置 OpenList 配置: {error}"))?;
+    let config_object = config
+        .as_object_mut()
+        .ok_or_else(|| "内置 OpenList 配置格式异常".to_string())?;
+    let scheme = config_object
+        .entry("scheme".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !scheme.is_object() {
+        *scheme = serde_json::json!({});
+    }
+    let scheme_object = scheme
+        .as_object_mut()
+        .ok_or_else(|| "内置 OpenList 网络配置格式异常".to_string())?;
+    scheme_object.insert("address".to_string(), serde_json::json!("127.0.0.1"));
+    scheme_object.insert("http_port".to_string(), serde_json::json!(BUILTIN_OPENLIST_PORT));
+
+    let next_text = serde_json::to_string_pretty(&config)
+        .map_err(|error| format!("无法写入内置 OpenList 配置: {error}"))?;
+    fs::write(&config_path, next_text)
+        .map_err(|error| format!("无法保存内置 OpenList 配置: {error}"))?;
+    Ok(())
 }
 
 fn parse_admin_password(output: &str) -> Option<String> {
@@ -1377,7 +1420,7 @@ fn builtin_openlist_status(app: AppHandle) -> Result<BuiltinOpenListStatus, Stri
     Ok(BuiltinOpenListStatus {
         available: binary.is_some(),
         running,
-        server_url: OPENLIST_URL.to_string(),
+        server_url: BUILTIN_OPENLIST_URL.to_string(),
         binary_path: binary.as_ref().map(|path| path.display().to_string()),
         data_dir: data_dir.as_ref().map(|path| path.display().to_string()),
         message: if binary.is_some() {
@@ -1487,6 +1530,7 @@ fn start_local_aria2(
 fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, String> {
     let binary = openlist_binary(&app).ok_or_else(|| "安装包中未找到内置 OpenList".to_string())?;
     let data_dir = app_data_dir(&app)?;
+    ensure_builtin_openlist_config(&binary, &data_dir)?;
 
     if !is_port_open() {
         hidden_command(&binary)
@@ -1504,14 +1548,14 @@ fn start_builtin_openlist(app: AppHandle) -> Result<BuiltinOpenListSession, Stri
     }
 
     if !is_port_open() {
-        return Err("内置 OpenList 启动超时，请检查端口 5244 是否被占用".to_string());
+        return Err(format!("内置 OpenList 启动超时，请检查端口 {BUILTIN_OPENLIST_PORT} 是否被占用"));
     }
 
     let token = read_admin_token(&binary, &data_dir)?;
     let admin_password = ensure_builtin_admin_password(&binary, &data_dir)?;
 
     Ok(BuiltinOpenListSession {
-        server_url: OPENLIST_URL.to_string(),
+        server_url: BUILTIN_OPENLIST_URL.to_string(),
         token,
         data_dir: data_dir.display().to_string(),
         admin_username: "admin".to_string(),

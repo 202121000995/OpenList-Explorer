@@ -76,7 +76,7 @@ button {
 
 .window-titlebar {
   display: grid;
-  grid-template-columns: minmax(150px, 248px) minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(150px, 248px) minmax(96px, 1fr) max-content;
   align-items: center;
   height: 38px;
   padding: 0 10px 0 14px;
@@ -157,7 +157,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  min-width: 0;
+  min-width: max-content;
   max-width: 100%;
   overflow: hidden;
 }
@@ -880,6 +880,40 @@ button {
   width: min(620px, 94vw);
 }
 
+.shell-modal {
+  width: min(980px, calc(100vw - 36px));
+  max-height: calc(100vh - 48px);
+  border-radius: 8px;
+}
+
+.shell-modal .n-card__content {
+  min-height: 0;
+  max-height: calc(100vh - 124px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.task-shell-modal .task-view,
+.settings-shell-modal .settings-view {
+  width: 100%;
+  height: min(680px, calc(100vh - 124px));
+  padding: 16px;
+  overflow: auto;
+}
+
+.task-shell-modal .panel {
+  height: 100%;
+}
+
+.settings-shell-modal {
+  width: min(760px, calc(100vw - 36px));
+}
+
+.settings-shell-modal .settings-section {
+  border: 0;
+  padding: 0;
+}
+
 .raw-url-qr {
   display: block;
   width: 180px;
@@ -1161,6 +1195,67 @@ button {
   grid-column: 1 / -1;
 }
 
+.aria2-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.aria2-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-subtle);
+}
+
+.aria2-panel-title {
+  margin-bottom: 10px;
+  color: var(--app-text);
+  font-weight: 800;
+}
+
+.admin-browser-card {
+  width: min(1120px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 48px));
+  border-radius: 8px;
+}
+
+.admin-browser-card .n-card__content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  height: calc(100% - 48px);
+  min-height: 0;
+}
+
+.admin-login-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-muted);
+  background: var(--app-subtle);
+  font-size: 12px;
+}
+
+.admin-login-strip strong {
+  color: var(--app-text);
+}
+
+.admin-browser-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .instance-status {
   display: inline-flex;
   align-items: center;
@@ -1281,7 +1376,7 @@ button {
   }
 
   .window-titlebar {
-    grid-template-columns: minmax(126px, 190px) minmax(0, 1fr) minmax(116px, auto);
+    grid-template-columns: minmax(126px, 190px) minmax(68px, 1fr) max-content;
   }
 
   .window-brand span {
@@ -1346,11 +1441,15 @@ button {
   .instance-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .aria2-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 900px) {
   .window-titlebar {
-    grid-template-columns: 48px minmax(0, 1fr) minmax(104px, auto);
+    grid-template-columns: 48px minmax(44px, 1fr) max-content;
     padding-left: 10px;
   }
 
