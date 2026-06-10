@@ -1,10 +1,12 @@
 <template>
   <n-data-table
+    class="task-table"
     :columns="columns"
     :data="tasks"
     :bordered="false"
     :single-line="false"
     :pagination="{ pageSize: 12 }"
+    :scroll-x="1040"
   />
 </template>
 
@@ -28,12 +30,12 @@ const emit = defineEmits<{
 }>()
 
 const columns = computed<DataTableColumns<TransferTask>>(() => [
-  { title: '名称', key: 'name', minWidth: 220 },
-  { title: '路径', key: 'path', minWidth: 260 },
+  { title: '名称', key: 'name', minWidth: 190, ellipsis: { tooltip: true } },
+  { title: '路径', key: 'path', minWidth: 220, ellipsis: { tooltip: true } },
   {
     title: '详情',
     key: 'message',
-    minWidth: 220,
+    minWidth: 180,
     ellipsis: { tooltip: true },
     render(row) {
       return row.message || '-'
@@ -42,7 +44,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '状态',
     key: 'status',
-    width: 110,
+    width: 96,
     render(row) {
       const type = row.status === 'success' ? 'success' : row.status === 'failed' ? 'error' : 'default'
       return h(NTag, { type, size: 'small' }, { default: () => taskStatusLabel[row.status] })
@@ -51,7 +53,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '进度',
     key: 'progress',
-    width: 180,
+    width: 150,
     render(row) {
       return h(NProgress, { percentage: row.progress, height: 8, processing: row.status === 'running' })
     }
@@ -59,7 +61,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '速度',
     key: 'speed',
-    width: 120,
+    width: 104,
     render(row) {
       return row.speed ? `${formatBytes(row.speed)}/s` : '-'
     }
@@ -67,7 +69,9 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
   {
     title: '',
     key: 'actions',
-    width: 212,
+    width: 150,
+    fixed: 'right',
+    align: 'right',
     render(row) {
       const localControllable = row.source !== 'openlist-offline'
       const cloudTask = row.source === 'openlist-offline'
@@ -76,7 +80,7 @@ const columns = computed<DataTableColumns<TransferTask>>(() => [
         ? ['paused', 'failed', 'canceled'].includes(row.status)
         : cloudTask && ['failed', 'canceled'].includes(row.status)
       const canCancel = ['waiting', 'running', 'paused'].includes(row.status) && (localControllable || cloudTask)
-      return h(NSpace, { justify: 'end', size: 6 }, () => [
+      return h(NSpace, { class: 'task-actions', justify: 'end', size: 4, wrap: false }, () => [
         h(
           NButton,
           {

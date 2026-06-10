@@ -13,7 +13,7 @@
 
 body {
   margin: 0;
-  min-width: 1040px;
+  min-width: 760px;
   min-height: 100vh;
   overflow: hidden;
 }
@@ -76,7 +76,7 @@ button {
 
 .window-titlebar {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 248px) minmax(0, 1fr) minmax(0, auto);
   align-items: center;
   height: 38px;
   padding: 0 10px 0 14px;
@@ -106,8 +106,16 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  width: max-content;
+  min-width: 0;
+  max-width: 100%;
   font-weight: 750;
+}
+
+.window-brand span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .window-brand svg {
@@ -118,6 +126,8 @@ button {
   display: inline-flex;
   justify-self: start;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .titlebar-nav-item {
@@ -129,6 +139,7 @@ button {
   border-radius: 7px;
   color: var(--app-muted);
   font-size: 13px;
+  flex: 0 0 auto;
 }
 
 .titlebar-nav-item span,
@@ -146,6 +157,9 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .connection-pill,
@@ -161,6 +175,14 @@ button {
   background: var(--app-elevated);
   font-size: 12px;
   font-weight: 650;
+  min-width: 0;
+}
+
+.connection-pill span:last-child,
+.openlist-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .openlist-button:hover {
@@ -171,6 +193,7 @@ button {
 
 .connection-pill {
   cursor: default;
+  max-width: 180px;
 }
 
 .status-dot {
@@ -201,6 +224,7 @@ button {
   height: 30px;
   border-radius: 7px;
   color: var(--app-muted);
+  flex: 0 0 auto;
 }
 
 .chrome-button:hover,
@@ -915,6 +939,7 @@ button {
   height: 100%;
   padding: 18px 24px;
   overflow: auto;
+  min-width: 0;
 }
 
 .storage-overview {
@@ -954,6 +979,7 @@ button {
 .panel,
 .settings-section {
   min-height: 180px;
+  min-width: 0;
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -1082,6 +1108,19 @@ button {
   background: rgba(208, 48, 80, 0.08);
 }
 
+.task-table {
+  min-width: 0;
+}
+
+.task-table .n-data-table-base-table {
+  min-width: 0;
+}
+
+.task-actions .n-button {
+  width: 26px;
+  height: 26px;
+}
+
 .secret-row {
   display: inline-flex;
   align-items: center;
@@ -1149,11 +1188,42 @@ button {
 
 @media (max-width: 1120px) {
   body {
-    min-width: 860px;
+    min-width: 760px;
   }
 
   .window-titlebar {
-    grid-template-columns: 220px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(126px, 190px) minmax(0, 1fr) minmax(116px, auto);
+  }
+
+  .window-brand span {
+    max-width: 128px;
+  }
+
+  .titlebar-nav-item {
+    padding: 0 8px;
+  }
+
+  .titlebar-nav-item span {
+    display: none;
+  }
+
+  .connection-pill {
+    max-width: 128px;
+    padding-inline: 8px;
+  }
+
+  .openlist-button {
+    width: 30px;
+    padding: 0;
+    color: transparent;
+    font-size: 0;
+  }
+
+  .openlist-button::before {
+    content: "OL";
+    color: var(--app-muted);
+    font-size: 12px;
+    font-weight: 800;
   }
 
   .explorer-workbench {
@@ -1182,5 +1252,35 @@ button {
 
   .dashboard-columns {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .window-titlebar {
+    grid-template-columns: 48px minmax(0, 1fr) minmax(104px, auto);
+    padding-left: 10px;
+  }
+
+  .window-brand span,
+  .connection-pill span:last-child {
+    display: none;
+  }
+
+  .window-brand {
+    justify-content: center;
+  }
+
+  .connection-pill {
+    width: 30px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .task-view {
+    padding: 12px;
+  }
+
+  .panel {
+    padding: 12px;
   }
 }
