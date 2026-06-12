@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TAURI_CONF = ROOT / "src-tauri" / "tauri.conf.json"
 PACKAGE_JSON = ROOT / "package.json"
+CARGO_TOML = ROOT / "src-tauri" / "Cargo.toml"
 OPENLIST_BIN = ROOT / "src-tauri" / "binaries" / "openlist-x86_64-pc-windows-msvc.exe"
 ARIA2_BIN = ROOT / "src-tauri" / "binaries" / "aria2c-x86_64-pc-windows-msvc.exe"
 
@@ -31,9 +32,11 @@ def main():
     failures = 0
     package = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
     tauri = json.loads(TAURI_CONF.read_text(encoding="utf-8"))
+    cargo_toml = CARGO_TOML.read_text(encoding="utf-8")
     version = package["version"]
 
     failures += not check(version == tauri["version"], f"package.json and tauri.conf.json version match: {version}")
+    failures += not check(f'version = "{version}"' in cargo_toml, f"Cargo.toml version matches: {version}")
 
     external = set(tauri.get("bundle", {}).get("externalBin", []))
     failures += not check("binaries/openlist" in external, "Tauri externalBin includes bundled OpenList")

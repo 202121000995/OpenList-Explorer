@@ -6,6 +6,8 @@ $Version = $PackageJson.version
 $Installer = Join-Path $ProjectRoot "src-tauri\target\release\bundle\nsis\OpenList Explorer_$($Version)_x64-setup.exe"
 $Publisher = Join-Path $ProjectRoot "scripts\publish_github.py"
 $P0Check = Join-Path $ProjectRoot "scripts\p0_release_check.py"
+$EncodingCheck = Join-Path $ProjectRoot "scripts\check_encoding.cmd"
+$ModalCheck = Join-Path $ProjectRoot "scripts\check_modal_layout.cmd"
 
 Write-Host "Project:   $ProjectRoot"
 Write-Host "Version:   $Version"
@@ -20,6 +22,12 @@ if (-not (Test-Path $Publisher)) {
 }
 if (-not (Test-Path $P0Check)) {
   throw "P0 release check script not found: $P0Check"
+}
+if (-not (Test-Path $EncodingCheck)) {
+  throw "Encoding check script not found: $EncodingCheck"
+}
+if (-not (Test-Path $ModalCheck)) {
+  throw "Modal layout check script not found: $ModalCheck"
 }
 
 if (-not (Test-Path $Installer)) {
@@ -41,6 +49,20 @@ if ($Python) {
 }
 if (-not $PythonExe) {
   throw "Python was not found. Install Python, add it to PATH, or run this from Codex Desktop where the bundled Python runtime exists."
+}
+
+Write-Host ""
+Write-Host "> encoding check"
+& $EncodingCheck
+if ($LASTEXITCODE -ne 0) {
+  throw "Encoding check failed. Fix the text encoding before publishing."
+}
+
+Write-Host ""
+Write-Host "> modal screenshot check"
+& $ModalCheck
+if ($LASTEXITCODE -ne 0) {
+  throw "Modal screenshot check failed. Fix the modal layout before publishing."
 }
 
 Write-Host ""
