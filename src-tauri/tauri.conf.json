@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "OpenList Explorer",
-  "version": "0.1.21",
+  "version": "0.1.25",
   "identifier": "com.openlist.explorer",
   "build": {
     "beforeDevCommand": "npm run dev",

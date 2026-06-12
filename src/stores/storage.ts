@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { fsApi } from '@/api/fs'
+import type { FileListResponse } from '@/models/file'
 import { defaultStorages, type StorageEntry } from '@/models/storage'
 import { resolveStorageLogo } from '@/models/storageLogos'
 
@@ -20,35 +21,39 @@ export const useStorageStore = defineStore('storage', () => {
     activeStorageId.value = id
   }
 
+  function applyRootList(response: FileListResponse) {
+    const mountDirs = (response.content ?? []).filter((item) => item.is_dir)
+
+    storages.value = mountDirs.map((item) => {
+      const mountPath = `/${item.name}`
+      const logo = resolveStorageLogo(item.name)
+
+      return {
+        id: mountPath,
+        name: item.name,
+        driver: response.provider && response.provider !== 'unknown' ? response.provider : 'OpenList',
+        mountPath,
+        color: logo.color,
+        iconText: logo.label,
+        logoKey: logo.key,
+        usedBytes: item.size > 0 ? item.size : undefined,
+        totalBytes: undefined
+      }
+    })
+
+    if (!storages.value.some((storage) => storage.id === activeStorageId.value)) {
+      activeStorageId.value = storages.value[0]?.id ?? ''
+    }
+    lastLoadedAt.value = Date.now()
+  }
+
   async function loadFromOpenList() {
     loading.value = true
     loadError.value = ''
 
     try {
       const response = await fsApi.list({ path: '/', page: 1, per_page: 200, refresh: true })
-      const mountDirs = (response.content ?? []).filter((item) => item.is_dir)
-
-      storages.value = mountDirs.map((item) => {
-        const mountPath = `/${item.name}`
-        const logo = resolveStorageLogo(item.name)
-
-        return {
-          id: mountPath,
-          name: item.name,
-          driver: response.provider && response.provider !== 'unknown' ? response.provider : 'OpenList',
-          mountPath,
-          color: logo.color,
-          iconText: logo.label,
-          logoKey: logo.key,
-          usedBytes: item.size > 0 ? item.size : undefined,
-          totalBytes: undefined
-        }
-      })
-
-      if (!storages.value.some((storage) => storage.id === activeStorageId.value)) {
-        activeStorageId.value = storages.value[0]?.id ?? ''
-      }
-      lastLoadedAt.value = Date.now()
+      applyRootList(response)
     } catch (error) {
       storages.value = []
       activeStorageId.value = ''
@@ -74,6 +79,7 @@ export const useStorageStore = defineStore('storage', () => {
     loadError,
     lastLoadedAt,
     selectStorage,
+    applyRootList,
     loadFromOpenList,
     clearStorages
   }

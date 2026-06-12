@@ -111,8 +111,12 @@ export const fsApi = {
     return openListHttp.get<unknown, OpenListSettingItem[]>('/api/admin/setting/list')
   },
 
+  saveAdminSettings(items: Array<{ key: string; value: string }>) {
+    return openListHttp.post('/api/admin/setting/save', items)
+  },
+
   saveAdminSetting(key: string, value: string) {
-    return openListHttp.post('/api/admin/setting/save', { key, value })
+    return openListHttp.post('/api/admin/setting/save', [{ key, value }])
   },
 
   offlineDownloadUndoneTasks() {

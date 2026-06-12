@@ -1,9 +1,21 @@
 <template>
   <div class="task-view" :class="{ 'embedded-task-view': embedded }">
-    <div class="panel">
-      <div class="panel-heading">
-        <span v-if="!embedded">{{ type === 'upload' ? '上传任务' : '下载任务' }}</span>
-        <n-space size="small">
+    <div class="panel task-panel">
+      <div class="task-panel-header">
+        <div v-if="!embedded" class="panel-heading">{{ type === 'upload' ? '上传任务' : '下载任务' }}</div>
+        <div class="task-filter-tabs">
+          <button
+            v-for="item in filterTabs"
+            :key="item.key"
+            class="task-filter-tab"
+            :class="{ active: statusFilter === item.key }"
+            type="button"
+            @click="statusFilter = item.key"
+          >
+            {{ item.label }} {{ item.count }}
+          </button>
+        </div>
+        <div class="task-panel-actions">
           <n-button
             v-if="type === 'download'"
             size="small"
@@ -14,13 +26,16 @@
           >
             刷新云下载状态
           </n-button>
-          <n-button size="small" secondary :disabled="!visibleTasks.length" @click="tasksStore.clearTasks(type)">
-            清空日志
+          <n-button size="small" secondary :disabled="!runningCount" @click="pauseAll">
+            全部暂停
           </n-button>
-        </n-space>
+          <n-button size="small" secondary type="error" :disabled="!visibleTasks.length" @click="tasksStore.clearTasks(type)">
+            全部删除
+          </n-button>
+        </div>
       </div>
       <TaskList
-        :tasks="visibleTasks"
+        :tasks="displayTasks"
         @pause="pauseTask"
         @resume="resumeTask"
         @cancel="cancelTask"
@@ -28,6 +43,10 @@
         @reveal="openTaskFolder"
         @detail="openTaskDetail"
       />
+      <div class="task-panel-footer">
+        <span>{{ visibleTasks.length }} 个任务</span>
+        <span v-if="totalSpeed">{{ type === 'upload' ? '上传' : '下载' }} {{ totalSpeed }}</span>
+      </div>
     </div>
 
     <n-modal v-model:show="detailDialog">
@@ -60,7 +79,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { NButton, NSpace, useMessage } from 'naive-ui'
+import { NButton, useMessage } from 'naive-ui'
 import TaskList from '@/components/TaskList.vue'
 import { fsApi } from '@/api/fs'
 import {
@@ -77,6 +96,9 @@ import { useHistoryStore } from '@/stores/history'
 import { useSettingsStore } from '@/stores/settings'
 import { useTasksStore } from '@/stores/tasks'
 import { taskStageLabel } from '@/models/task'
+import { formatBytes } from '@/utils/format'
+
+type TaskFilter = 'all' | 'running' | 'success' | 'failed'
 
 const props = defineProps<{
   type: 'upload' | 'download'
@@ -90,9 +112,29 @@ const message = useMessage()
 const syncingCloudTasks = ref(false)
 const detailDialog = ref(false)
 const detailTaskId = ref('')
+const statusFilter = ref<TaskFilter>('all')
 let syncTimer: number | null = null
 const visibleTasks = computed(() => (props.type === 'upload' ? tasksStore.uploadTasks : tasksStore.downloadTasks))
 const detailTask = computed(() => tasksStore.taskById(detailTaskId.value))
+const runningCount = computed(() => visibleTasks.value.filter((task) => task.status === 'running' || task.status === 'waiting').length)
+const successCount = computed(() => visibleTasks.value.filter((task) => task.status === 'success').length)
+const failedCount = computed(() => visibleTasks.value.filter((task) => task.status === 'failed').length)
+const displayTasks = computed(() => {
+  if (statusFilter.value === 'running') return visibleTasks.value.filter((task) => task.status === 'running' || task.status === 'waiting')
+  if (statusFilter.value === 'success') return visibleTasks.value.filter((task) => task.status === 'success')
+  if (statusFilter.value === 'failed') return visibleTasks.value.filter((task) => task.status === 'failed')
+  return visibleTasks.value
+})
+const filterTabs = computed(() => [
+  { key: 'all' as const, label: '全部', count: visibleTasks.value.length },
+  { key: 'running' as const, label: props.type === 'upload' ? '上传中' : '下载中', count: runningCount.value },
+  { key: 'success' as const, label: '已完成', count: successCount.value },
+  { key: 'failed' as const, label: '失败', count: failedCount.value }
+])
+const totalSpeed = computed(() => {
+  const speed = visibleTasks.value.reduce((sum, task) => sum + (task.status === 'running' ? task.speed || 0 : 0), 0)
+  return speed ? `${formatBytes(speed)}/s` : ''
+})
 
 async function refreshCloudTasks(showMessage = true) {
   if (props.type !== 'download' || syncingCloudTasks.value) return
@@ -163,6 +205,10 @@ async function cancelTask(id: string) {
   }
   tasksStore.setStatus(id, 'canceled')
   await cancelTransferTask(id)
+}
+
+async function pauseAll() {
+  await Promise.all(visibleTasks.value.filter((task) => task.status === 'running').map((task) => pauseTask(task.id)))
 }
 
 async function removeTask(id: string) {

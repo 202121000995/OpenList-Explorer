@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    io,
+    io::{self, Read, Write},
     fs,
     net::{TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
@@ -167,6 +167,55 @@ fn is_local_port_open(port: u16) -> bool {
         .and_then(|mut addrs| addrs.next())
         .and_then(|addr| TcpStream::connect_timeout(&addr, Duration::from_millis(600)).ok())
         .is_some()
+}
+
+fn probe_aria2_rpc(port: u16, rpc_secret: Option<&str>) -> Result<(), String> {
+    let addr = ("127.0.0.1", port)
+        .to_socket_addrs()
+        .map_err(|error| format!("无法解析 Aria2 RPC 地址: {error}"))?
+        .next()
+        .ok_or_else(|| "无法解析 Aria2 RPC 地址".to_string())?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(800))
+        .map_err(|error| format!("无法连接 Aria2 RPC 端口 {port}: {error}"))?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .map_err(|error| format!("无法设置 Aria2 RPC 读取超时: {error}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .map_err(|error| format!("无法设置 Aria2 RPC 写入超时: {error}"))?;
+
+    let params = rpc_secret
+        .map(str::trim)
+        .filter(|secret| !secret.is_empty())
+        .map(|secret| vec![format!("token:{secret}")])
+        .unwrap_or_default();
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "openlist-explorer",
+        "method": "aria2.getVersion",
+        "params": params
+    })
+    .to_string();
+    let request = format!(
+        "POST /jsonrpc HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.as_bytes().len(),
+        body
+    );
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|error| format!("无法请求 Aria2 RPC: {error}"))?;
+
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .map_err(|error| format!("无法读取 Aria2 RPC 响应: {error}"))?;
+    if response.contains("\"jsonrpc\"") && (response.contains("\"result\"") || response.contains("\"error\"")) {
+        if response.contains("Unauthorized") {
+            return Err("Aria2 RPC 已响应，但密钥不匹配。请清空密钥或使用启动该 Aria2 的密钥。".to_string());
+        }
+        return Ok(());
+    }
+    Err("端口已打开，但响应不是 Aria2 JSON-RPC。可能被其他程序占用。".to_string())
 }
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1487,10 +1536,15 @@ fn builtin_openlist_status(app: AppHandle) -> Result<BuiltinOpenListStatus, Stri
 }
 
 #[tauri::command]
-fn local_aria2_status(app: AppHandle, rpc_port: Option<u16>) -> Result<LocalAria2Status, String> {
+fn local_aria2_status(
+    app: AppHandle,
+    rpc_port: Option<u16>,
+    rpc_secret: Option<String>,
+) -> Result<LocalAria2Status, String> {
     let binary = managed_aria2_binary(&app).or_else(|| aria2_binary(&app));
     let port = rpc_port.unwrap_or(6800);
-    let running = is_local_port_open(port);
+    let probe_result = probe_aria2_rpc(port, rpc_secret.as_deref());
+    let running = probe_result.is_ok();
 
     Ok(LocalAria2Status {
         available: binary.is_some(),
@@ -1502,6 +1556,11 @@ fn local_aria2_status(app: AppHandle, rpc_port: Option<u16>) -> Result<LocalAria
         message: if binary.is_some() {
             if running {
                 "本机 Aria2 RPC 已可连接".to_string()
+            } else if is_local_port_open(port) {
+                match probe_result {
+                    Ok(()) => "本机 Aria2 RPC 已可连接".to_string(),
+                    Err(error) => error,
+                }
             } else {
                 "安装包中已包含 Aria2，但尚未启动 RPC。".to_string()
             }
@@ -1531,8 +1590,22 @@ fn start_local_aria2(
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(default_download_dir);
+    let rpc_secret = rpc_secret.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
 
-    if !is_local_port_open(port) {
+    if probe_aria2_rpc(port, rpc_secret.as_deref()).is_err() {
+        if is_local_port_open(port) {
+            stop_managed_process(MANAGED_ARIA2_EXE);
+            thread::sleep(Duration::from_millis(700));
+        }
+    }
+
+    if probe_aria2_rpc(port, rpc_secret.as_deref()).is_err() {
+        if is_local_port_open(port) {
+            return Err(format!(
+                "Aria2 RPC 端口 {port} 已被占用，但不是当前配置可用的 Aria2。请换一个 RPC 端口，或关闭占用该端口的程序。"
+            ));
+        }
+
         let aria2_dir = app
             .path()
             .app_data_dir()
@@ -1559,20 +1632,33 @@ fn start_local_aria2(
         command.arg(format!("--dir={}", download_dir.display()));
         command.arg(format!("--input-file={}", session_path.display()));
         command.arg(format!("--save-session={}", session_path.display()));
-        if let Some(secret) = rpc_secret.map(|value| value.trim().to_string()).filter(|value| !value.is_empty()) {
+        if let Some(secret) = rpc_secret.as_deref() {
             command.arg(format!("--rpc-secret={secret}"));
         }
         command.spawn().map_err(|error| format!("无法启动 Aria2: {error}"))?;
 
+        let mut last_error = "Aria2 RPC 未响应".to_string();
         for _ in 0..20 {
-            if is_local_port_open(port) {
+            match probe_aria2_rpc(port, rpc_secret.as_deref()) {
+                Ok(()) => {
+                    last_error.clear();
+                    break;
+                }
+                Err(error) => {
+                    last_error = error;
+                }
+            }
+            if last_error.is_empty() {
                 break;
             }
             thread::sleep(Duration::from_millis(250));
         }
+        if !last_error.is_empty() {
+            return Err(format!("Aria2 已尝试启动，但 RPC 无法连接: {last_error}"));
+        }
     }
 
-    let mut status = local_aria2_status(app, Some(port))?;
+    let mut status = local_aria2_status(app, Some(port), rpc_secret)?;
     status.download_dir = Some(download_dir.display().to_string());
     Ok(status)
 }

@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { CircleAlert, Plus, RefreshCw } from '@lucide/vue'
 import { useDialog, useMessage, type DropdownOption } from 'naive-ui'
@@ -152,14 +152,17 @@ async function refreshStorages() {
     await settingsStore.initializeToken()
     await storageStore.loadFromOpenList()
     if (storageStore.loadError) {
+      settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
       message.error(storageStore.loadError)
       return
     }
 
     filesStore.resetToActiveStorage()
     if (storageStore.activeStorage) await filesStore.load()
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, storageStore.hasStorages ? 'online' : 'unknown')
     message.success(storageStore.hasStorages ? 'OpenList 已刷新' : 'OpenList 已连接，但未读取到挂载点')
   } catch (error) {
+    settingsStore.markInstanceStatus(settingsStore.activeInstanceId, 'offline')
     message.error(error instanceof Error ? error.message : 'OpenList 刷新失败')
   }
 }
@@ -224,9 +227,4 @@ async function handleInstanceMenuSelect(key: string) {
   }
 }
 
-onMounted(async () => {
-  settingsStore.ensureInstances()
-  await settingsStore.initializeToken()
-  await storageStore.loadFromOpenList()
-})
 </script>

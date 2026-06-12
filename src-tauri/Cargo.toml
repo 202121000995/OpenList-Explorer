@@ -1,6 +1,6 @@
 [package]
 name = "openlist-explorer"
-version = "0.1.21"
+version = "0.1.25"
 description = "Unified storage resource manager for OpenList"
 authors = ["OpenList Explorer"]
 edition = "2021"

@@ -1,23 +1,119 @@
 <template>
-  <n-data-table
-    class="task-table"
-    :columns="columns"
-    :data="tasks"
-    :bordered="false"
-    :single-line="false"
-    :pagination="{ pageSize: 8 }"
-    :scroll-x="900"
-  />
+  <div class="task-card-list">
+    <div v-if="!tasks.length" class="task-empty">
+      <div class="task-empty-title">暂无任务</div>
+      <div class="task-empty-text">上传、下载或云下载任务会显示在这里。</div>
+    </div>
+
+    <article v-for="task in tasks" :key="task.id" class="task-card">
+      <div class="task-card-icon" :class="task.type">
+        <FileUp v-if="task.type === 'upload'" :size="22" />
+        <FileDown v-else :size="22" />
+      </div>
+
+      <div class="task-card-main">
+        <div class="task-card-title-row">
+          <button class="task-name-button" type="button" :title="task.name" @click="emit('detail', task.id)">
+            {{ task.name }}
+          </button>
+        </div>
+
+        <div class="task-progress-row">
+          <n-tooltip>
+            <template #trigger>
+              <span class="task-progress-text">{{ progressText(task) }}</span>
+            </template>
+            {{ progressTooltip(task) }}
+          </n-tooltip>
+          <n-progress
+            class="task-progress"
+            :percentage="task.progress"
+            :height="6"
+            :border-radius="3"
+            :show-indicator="false"
+            :processing="task.status === 'running'"
+          />
+        </div>
+      </div>
+
+      <div class="task-card-state">
+        <span class="task-speed">{{ task.speed ? `${formatBytes(task.speed)}/s` : '-' }}</span>
+        <span class="task-status-pill" :class="task.status">{{ taskStatusLabel[task.status] }}</span>
+        <button class="task-detail-line" type="button" :title="detailText(task)" @click="emit('detail', task.id)">
+          {{ stageText(task) }}
+        </button>
+      </div>
+
+      <div class="task-card-actions">
+        <n-tooltip>
+          <template #trigger>
+            <n-button
+              circle
+              size="small"
+              secondary
+              :disabled="!task.localPath"
+              @click="task.localPath && emit('reveal', task.localPath)"
+            >
+              <template #icon><FolderOpen :size="15" /></template>
+            </n-button>
+          </template>
+          打开所在文件夹
+        </n-tooltip>
+
+        <n-tooltip>
+          <template #trigger>
+            <n-button circle size="small" secondary :disabled="!canPause(task)" @click="emit('pause', task.id)">
+              <template #icon><Pause :size="15" /></template>
+            </n-button>
+          </template>
+          暂停
+        </n-tooltip>
+
+        <n-tooltip>
+          <template #trigger>
+            <n-button circle size="small" secondary :disabled="!canResume(task)" @click="emit('resume', task.id)">
+              <template #icon><Play :size="15" /></template>
+            </n-button>
+          </template>
+          {{ resumeTitle(task) }}
+        </n-tooltip>
+
+        <n-tooltip>
+          <template #trigger>
+            <n-button
+              circle
+              size="small"
+              secondary
+              type="error"
+              :disabled="!canCancel(task)"
+              @click="emit('cancel', task.id)"
+            >
+              <template #icon><X :size="15" /></template>
+            </n-button>
+          </template>
+          取消
+        </n-tooltip>
+
+        <n-tooltip>
+          <template #trigger>
+            <n-button circle size="small" secondary @click="emit('remove', task.id)">
+              <template #icon><Trash2 :size="15" /></template>
+            </n-button>
+          </template>
+          删除记录
+        </n-tooltip>
+      </div>
+    </article>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, h } from 'vue'
-import { NButton, NProgress, NSpace, NTag, type DataTableColumns } from 'naive-ui'
-import { FolderOpen, Pause, Play, Trash2, X } from '@lucide/vue'
+import { NButton, NProgress, NTooltip } from 'naive-ui'
+import { FileDown, FileUp, FolderOpen, Pause, Play, Trash2, X } from '@lucide/vue'
 import { taskStageLabel, taskStatusLabel, type TransferTask } from '@/models/task'
 import { formatBytes } from '@/utils/format'
 
-const props = defineProps<{
+defineProps<{
   tasks: TransferTask[]
 }>()
 
@@ -30,99 +126,42 @@ const emit = defineEmits<{
   detail: [id: string]
 }>()
 
-const columns = computed<DataTableColumns<TransferTask>>(() => [
-  { title: '名称', key: 'name', minWidth: 160, ellipsis: { tooltip: true } },
-  { title: '路径', key: 'path', minWidth: 200, ellipsis: { tooltip: true } },
-  {
-    title: '详情',
-    key: 'message',
-    minWidth: 170,
-    ellipsis: { tooltip: true },
-    render(row) {
-      const stage = row.stage ? taskStageLabel[row.stage] : ''
-      const text = [stage, row.message].filter(Boolean).join(' · ') || '-'
-      return h(
-        NButton,
-        { text: true, size: 'tiny', disabled: text === '-', onClick: () => emit('detail', row.id) },
-        { default: () => text }
-      )
-    }
-  },
-  {
-    title: '状态',
-    key: 'status',
-    width: 88,
-    render(row) {
-      const type = row.status === 'success' ? 'success' : row.status === 'failed' ? 'error' : 'default'
-      return h(NTag, { type, size: 'small' }, { default: () => taskStatusLabel[row.status] })
-    }
-  },
-  {
-    title: '进度',
-    key: 'progress',
-    width: 132,
-    render(row) {
-      return h(NProgress, { percentage: row.progress, height: 8, processing: row.status === 'running' })
-    }
-  },
-  {
-    title: '速度',
-    key: 'speed',
-    width: 92,
-    render(row) {
-      return row.speed ? `${formatBytes(row.speed)}/s` : '-'
-    }
-  },
-  {
-    title: '',
-    key: 'actions',
-    width: 136,
-    fixed: 'right',
-    align: 'right',
-    render(row) {
-      const localControllable = row.source !== 'openlist-offline'
-      const cloudTask = row.source === 'openlist-offline'
-      const canPause = localControllable && row.status === 'running'
-      const canResume = localControllable
-        ? ['paused', 'failed', 'canceled'].includes(row.status)
-        : cloudTask && ['failed', 'canceled'].includes(row.status)
-      const canCancel = ['waiting', 'running', 'paused'].includes(row.status) && (localControllable || cloudTask)
-      const resumeTitle = cloudTask ? '重试' : row.type === 'upload' && ['failed', 'canceled'].includes(row.status) ? '重新上传' : '继续'
-      return h(NSpace, { class: 'task-actions', justify: 'end', size: 4, wrap: false }, () => [
-        h(
-          NButton,
-          {
-            circle: true,
-            size: 'small',
-            secondary: true,
-            title: '打开所在文件夹',
-            disabled: !row.localPath,
-            onClick: () => row.localPath && emit('reveal', row.localPath)
-          },
-          { icon: () => h(FolderOpen, { size: 15 }) }
-        ),
-        h(
-          NButton,
-          { circle: true, size: 'small', secondary: true, title: '暂停', disabled: !canPause, onClick: () => emit('pause', row.id) },
-          { icon: () => h(Pause, { size: 15 }) }
-        ),
-        h(
-          NButton,
-          { circle: true, size: 'small', secondary: true, title: resumeTitle, disabled: !canResume, onClick: () => emit('resume', row.id) },
-          { icon: () => h(Play, { size: 15 }) }
-        ),
-        h(
-          NButton,
-          { circle: true, size: 'small', secondary: true, type: 'error', title: '取消', disabled: !canCancel, onClick: () => emit('cancel', row.id) },
-          { icon: () => h(X, { size: 15 }) }
-        ),
-        h(
-          NButton,
-          { circle: true, size: 'small', secondary: true, title: '删除记录', onClick: () => emit('remove', row.id) },
-          { icon: () => h(Trash2, { size: 15 }) }
-        )
-      ])
-    }
-  }
-])
+function stageText(task: TransferTask) {
+  if (task.stage) return taskStageLabel[task.stage]
+  return task.source === 'openlist-offline' ? 'OpenList 云下载' : '本地传输'
+}
+
+function detailText(task: TransferTask) {
+  return [stageText(task), task.message || task.path].filter(Boolean).join(' · ')
+}
+
+function progressText(task: TransferTask) {
+  if (task.status === 'success') return '已完成'
+  if (task.status === 'failed') return task.failureReason || '失败'
+  if (task.status === 'canceled') return '已取消'
+  return `${task.progress}%`
+}
+
+function progressTooltip(task: TransferTask) {
+  return [progressText(task), task.failureReason, task.message, task.path].filter(Boolean).join(' 路 ')
+}
+
+function canPause(task: TransferTask) {
+  return task.source !== 'openlist-offline' && task.status === 'running'
+}
+
+function canResume(task: TransferTask) {
+  if (task.source === 'openlist-offline') return ['failed', 'canceled'].includes(task.status)
+  return ['paused', 'failed', 'canceled'].includes(task.status)
+}
+
+function canCancel(task: TransferTask) {
+  return ['waiting', 'running', 'paused'].includes(task.status) && (task.source !== 'openlist-offline' || !!task.remoteId)
+}
+
+function resumeTitle(task: TransferTask) {
+  if (task.source === 'openlist-offline') return '重试'
+  if (task.type === 'upload' && ['failed', 'canceled'].includes(task.status)) return '重新上传'
+  return '继续'
+}
 </script>

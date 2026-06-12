@@ -168,13 +168,13 @@ async function handleNavClick(name: string) {
 }
 
 const connectionClass = computed(() => {
-  if (settingsStore.hasToken && storageStore.hasStorages) return 'online'
+  if (storageStore.hasStorages) return 'online'
   if (settingsStore.hasToken) return 'warning'
   return 'offline'
 })
 
 const connectionLabel = computed(() => {
-  if (settingsStore.hasToken && storageStore.hasStorages) return 'OpenList 已连接'
+  if (storageStore.hasStorages) return 'OpenList 已连接'
   if (settingsStore.hasToken) return 'OpenList 待读取'
   return 'OpenList 未连接'
 })
@@ -234,14 +234,18 @@ onMounted(async () => {
     tasksStore.hydrateFromDatabase()
   ])
 
-  unlistenTransfer = await listen<TransferProgressPayload>('transfer://progress', (event) => {
-    tasksStore.updateTask(event.payload.id, {
-      status: event.payload.status,
-      progress: event.payload.progress,
-      speed: event.payload.speed,
-      localPath: event.payload.local_path
+  try {
+    unlistenTransfer = await listen<TransferProgressPayload>('transfer://progress', (event) => {
+      tasksStore.updateTask(event.payload.id, {
+        status: event.payload.status,
+        progress: event.payload.progress,
+        speed: event.payload.speed,
+        localPath: event.payload.local_path
+      })
     })
-  })
+  } catch {
+    unlistenTransfer = null
+  }
 
   settingsStore.ensureInstances()
   await ensureActiveOpenListRuntime()

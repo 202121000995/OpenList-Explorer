@@ -71,6 +71,9 @@ export const useFilesStore = defineStore('files', () => {
       const response = await fsApi.list({ path, refresh, page: 1, per_page: 1000 })
       currentPath.value = path
       files.value = (response.content ?? []).map((item) => mapFile(path, item))
+      if (path === '/') {
+        storageStore.applyRootList(response)
+      }
       historyStore.add('browse', path)
     } catch (error) {
       lastError.value = error instanceof Error ? error.message : '目录加载失败'

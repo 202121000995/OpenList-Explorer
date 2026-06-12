@@ -344,13 +344,13 @@ function confirmRemoveInstance(id: string) {
 }
 
 const connectionClass = computed(() => {
-  if (settingsStore.hasToken && storageStore.hasStorages) return 'online'
+  if (storageStore.hasStorages) return 'online'
   if (settingsStore.hasToken) return 'warning'
   return 'offline'
 })
 
 const connectionTitle = computed(() => {
-  if (settingsStore.hasToken && storageStore.hasStorages) return '已连接 OpenList'
+  if (storageStore.hasStorages) return '已连接 OpenList'
   if (settingsStore.hasToken) return '已保存连接，等待读取存储'
   return '未连接 OpenList'
 })
@@ -381,7 +381,7 @@ const effectiveAria2DownloadDir = computed(() => {
 })
 const aria2LocalHint = computed(() => {
   if (aria2Status.value?.running) return '本机 Aria2 已连接。Explorer 会用软件设置里的下载目录启动它。'
-  if (aria2Status.value?.available) return '点击“一键连接 Aria2”即可启动随安装包提供的本机 RPC 服务。'
+  if (aria2Status.value?.available) return '点击“一键启用 Aria2”即可启动随安装包提供的本机 RPC 服务。'
   return '当前安装包未找到 aria2c，无法启动本机 Aria2 RPC。'
 })
 
@@ -479,7 +479,7 @@ async function refreshBuiltinStatus(showFeedback = true) {
 async function refreshCloudDownloadStatus(showFeedback = true) {
   loadingCloudTools.value = true
   try {
-    aria2Status.value = await getLocalAria2Status(settingsStore.aria2RpcPort)
+    aria2Status.value = await getLocalAria2Status(settingsStore.aria2RpcPort, settingsStore.aria2RpcSecret)
   } catch {
     aria2Status.value = {
       available: false,
@@ -529,8 +529,21 @@ async function configureOpenListAria2() {
   if (!settingsStore.hasToken) {
     throw new Error('请先连接 OpenList')
   }
-  await fsApi.saveAdminSetting('aria2_uri', `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`)
-  await fsApi.saveAdminSetting('aria2_secret', settingsStore.aria2RpcSecret || '')
+  const uri = `http://127.0.0.1:${settingsStore.aria2RpcPort}/jsonrpc`
+  await fsApi.saveAdminSettings([
+    { key: 'aria2_uri', value: uri },
+    { key: 'aria2_secret', value: settingsStore.aria2RpcSecret || '' }
+  ])
+
+  try {
+    const settings = await fsApi.adminSettings()
+    const savedUri = settings.find((item) => item.key === 'aria2_uri')?.value
+    if (savedUri && savedUri !== uri) {
+      throw new Error(`OpenList 返回的 Aria2 RPC 地址仍是 ${savedUri}`)
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('返回的 Aria2 RPC 地址')) throw error
+  }
 }
 
 async function enableAria2OneClick() {
@@ -544,9 +557,11 @@ async function enableAria2OneClick() {
       split: settingsStore.aria2Split
     })
     await configureOpenListAria2()
+    await new Promise((resolve) => window.setTimeout(resolve, 800))
     await refreshCloudDownloadStatus(false)
     if (!openListAria2Enabled.value) {
-      message.warning('本机 Aria2 已启动，但 OpenList 暂未返回 Aria2 工具。请确认当前 OpenList 版本支持通过管理 API 写入 Aria2 配置。')
+      const statusText = aria2Status.value?.message ? `本机状态：${aria2Status.value.message}` : '本机 Aria2 RPC 已可连接。'
+      message.warning(`${statusText} OpenList 已写入 Aria2 配置，但工具列表暂未刷新；请在 OpenList 管理端确认“离线下载/Aria2”已启用，或重启当前 OpenList。`)
       return
     }
     message.success('Aria2 已一键启用')

@@ -880,8 +880,10 @@ async function configureOpenListAria2() {
   if (!settingsStore.hasToken) {
     throw new Error('请先连接 OpenList')
   }
-  await fsApi.saveAdminSetting('aria2_uri', aria2RpcUrl.value)
-  await fsApi.saveAdminSetting('aria2_secret', settingsStore.aria2RpcSecret || '')
+  await fsApi.saveAdminSettings([
+    { key: 'aria2_uri', value: aria2RpcUrl.value },
+    { key: 'aria2_secret', value: settingsStore.aria2RpcSecret || '' }
+  ])
 }
 
 async function enableCloudAria2OneClick() {
@@ -895,6 +897,7 @@ async function enableCloudAria2OneClick() {
       split: settingsStore.aria2Split
     })
     await configureOpenListAria2()
+    await new Promise((resolve) => window.setTimeout(resolve, 800))
     const tools = await fsApi.offlineDownloadTools()
     cloudTools.value = tools.length ? tools : cloudTools.value
     const aria2 = tools.find((tool) => /aria2/i.test(tool))
@@ -903,7 +906,7 @@ async function enableCloudAria2OneClick() {
       message.success('Aria2 已一键启用')
       return
     }
-    message.warning('本机 Aria2 已启动，但 OpenList 暂未返回 Aria2 工具。请确认当前 OpenList 版本支持通过管理 API 写入 Aria2 配置。')
+    message.warning('本机 Aria2 RPC 已启动，OpenList 配置也已写入，但工具列表暂未刷新；请在 OpenList 管理端确认离线下载 Aria2 已启用，或重启当前 OpenList。')
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'Aria2 启用失败')
   } finally {
@@ -1351,6 +1354,12 @@ onMounted(async () => {
 
   if (storageStore.activeStorage) {
     filesStore.load(storageStore.activeStorage.mountPath)
+  } else if (settingsStore.hasToken) {
+    filesStore.load('/').then(() => {
+      if (!storageStore.activeStorage) return
+      filesStore.resetToActiveStorage()
+      filesStore.load(storageStore.activeStorage.mountPath)
+    })
   } else {
     filesStore.lastError = '请先设置 OpenList 连接'
   }

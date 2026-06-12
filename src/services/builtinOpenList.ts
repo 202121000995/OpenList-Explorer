@@ -31,8 +31,8 @@ export async function getBuiltinOpenListStatus() {
   return invoke<BuiltinOpenListStatus>('builtin_openlist_status')
 }
 
-export async function getLocalAria2Status(rpcPort = 6800) {
-  return invoke<LocalAria2Status>('local_aria2_status', { rpcPort })
+export async function getLocalAria2Status(rpcPort = 6800, rpcSecret = '') {
+  return invoke<LocalAria2Status>('local_aria2_status', { rpcPort, rpcSecret })
 }
 
 export interface StartAria2Payload {
